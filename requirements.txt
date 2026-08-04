@@ -1,0 +1,5 @@
+google-genai
+playwright
+python-docx
+pillow
+python-dotenv
