@@ -2,14 +2,14 @@
   "meta": {
     "version": "2.0",
     "description": "Auto TTB Test Executions & Test Cases Database",
-    "last_updated": "2026-08-05T23:06:10.909576"
+    "last_updated": "2026-08-06T00:40:44.142552"
   },
   "test_executions": {
     "QA-335546": {
       "te_key": "QA-335546",
       "created_at": "2026-08-05T21:39:45.525570",
-      "updated_at": "2026-08-05T23:06:10.909571",
-      "tc_count": 6,
+      "updated_at": "2026-08-06T00:40:44.142537",
+      "tc_count": 20,
       "test_cases": [
         {
           "key": "TC027_AP USER BLOCK USER IN MANAGE USER. CHECK ALL THE PAGES IN LIGHT MODE AND FONT FAMILY",
@@ -23,22 +23,92 @@
         },
         {
           "key": "TC032_SAP_SECENDARY AP LOGIN TO VIEW SUB-ADMIN, END USER, SECONDARY AP'S UNDER MANAGE USER TAB.ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
-          "summary": "logged in using SAP user, Manage user looks ok",
-          "status": "pass"
+          "status": "pass",
+          "summary": "logged in using SAP user, Manage user looks ok"
         },
         {
           "key": "TC033_AP_VIEW LOGIN HISTORY. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
-          "summary": "doesnt work, not sure if bug or not",
-          "status": "pending"
+          "status": "pending",
+          "summary": "doesnt work, not sure if bug or not"
         },
         {
           "key": "TC034_AP USER - VIEW MOBILITY SERVICE LINE - LIST. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
-          "summary": "all numbers display correctly according to figma",
-          "status": "pass"
+          "status": "pass",
+          "summary": "all numbers display correctly according to figma"
         },
         {
           "key": "TC035_AP USER - MANAGE ALIAS FOR MOBILITY LINES. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
-          "summary": "change a mobility line alias",
+          "status": "pass",
+          "summary": "change a mobility line alias"
+        },
+        {
+          "key": "TC036_AP USER - VIEW SIM DETAILS. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "status": "pass",
+          "summary": "View sim details passed according to figma"
+        },
+        {
+          "key": "TC037_AP USER - SEARCH FOR A MOBILITY LINE. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "status": "pending",
+          "summary": "the boarder of the search bar is cut off"
+        },
+        {
+          "key": "TC038_AP USER - VIEW MOBILITY SERVICE LINE - DETAILED OVERVIEW SCREEN. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "status": "pending",
+          "summary": "idk if this is screen"
+        },
+        {
+          "key": "TC039_AP USER � VIEW CREDIT BALANCE FOR PREPAID AND CONTROL PLUS LINES. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "status": "pass",
+          "summary": "looks fine, riyal symbol is clear, not sure of the wording"
+        },
+        {
+          "key": "TC040_AP USER � CHANGE CREDIT LIMIT SINGLE (MOBILITY).ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "status": "pending",
+          "summary": "i cant find the page"
+        },
+        {
+          "key": "TC043_AP USER - VIEW ADD-ONS IN MOBILITY LINE OVERVIEW. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "status": "pending",
+          "summary": "icon om call back doesnt follow figma"
+        },
+        {
+          "key": "TC044_END USER - VIEW ADD-ONS IN MOBILITY LINE OVERVIEW. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "status": "pending",
+          "summary": "icon doenst match figma"
+        },
+        {
+          "key": "TC045_AP USER - VIEW SHORT CODES. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "status": "pass",
+          "summary": "passed, matches figma"
+        },
+        {
+          "key": "TC046_AP USER TO ADD SHORT CODES. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "status": "pass",
+          "summary": "created successfully"
+        },
+        {
+          "key": "TC047_AP USER - MANAGE ALIAS FOR SHORT CODES. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "status": "pass",
+          "summary": "alias changed successfully, looks fine"
+        },
+        {
+          "key": "TC048_AP USER TO ADD BULK UPLOAD OF SHORT CODES. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "status": "pending",
+          "summary": ""
+        },
+        {
+          "key": "TC049_AP USER - DELETE SHORT CODES. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "status": "pass",
+          "summary": "deletes correctly, looks correct"
+        },
+        {
+          "key": "TC050_AP USER - SUSPEND SHORT CODES. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "summary": "suspension works, passed",
+          "status": "pass"
+        },
+        {
+          "key": "TC051_AP USER - RESUME SHORT CODES. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "summary": "short code reactivation works correctly, looks right",
           "status": "pass"
         }
       ]

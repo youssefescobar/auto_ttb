@@ -36,14 +36,27 @@ async function api(method, url, data = null) {
 
 function showToast(message, type = 'info') {
   const container = $('#toast-container');
+  if (!container) return;
+
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
+  toast.title = 'Click to dismiss';
   toast.innerHTML = `<span>${message}</span>`;
+  
+  toast.addEventListener('click', () => dismissToast(toast));
+
   container.appendChild(toast);
+
+  setTimeout(() => dismissToast(toast), 3000);
+}
+
+function dismissToast(toast) {
+  if (!toast || toast.dataset.dismissed) return;
+  toast.dataset.dismissed = 'true';
+  toast.classList.add('fade-out');
   setTimeout(() => {
-    toast.classList.add('fade-out');
-    toast.addEventListener('animationend', () => toast.remove());
-  }, 4000);
+    try { toast.remove(); } catch(e) {}
+  }, 300);
 }
 
 // Settings
@@ -152,27 +165,50 @@ function updateProgress() {
   if (fill) fill.style.width = total ? `${(done / total) * 100}%` : '0%';
 }
 
+let currentFilter = 'all';
+let searchQuery = '';
+
 function renderTCGrid() {
   const grid = $('#tc-grid');
+  if (!grid) return;
   grid.innerHTML = '';
-  state.testCases.forEach((tc, idx) => {
+
+  let filtered = state.testCases || [];
+  if (currentFilter !== 'all') {
+    filtered = filtered.filter(tc => tc.status === currentFilter);
+  }
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    filtered = filtered.filter(tc => (tc.key && tc.key.toLowerCase().includes(q)) || (tc.summary && tc.summary.toLowerCase().includes(q)));
+  }
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `
+      <div class="w-full text-center py-8 text-gray" style="grid-column: 1 / -1; padding: 3rem;">
+        <p>No test cases found matching current search/filter.</p>
+      </div>
+    `;
+    updateProgress();
+    return;
+  }
+
+  filtered.forEach((tc, idx) => {
     const card = document.createElement('div');
     card.className = 'tc-card';
-    card.style.animationDelay = `${idx * 0.04}s`;
+    card.style.animationDelay = `${idx * 0.03}s`;
 
-    const labels = { pending: 'Pending', pass: 'Pass', fail: 'Fail', skip: 'Skip' };
-    const label = labels[tc.status] || 'Pending';
+    const statusUpper = (tc.status || 'pending').toUpperCase();
 
     card.innerHTML = `
       <div class="tc-card-header">
         <span class="tc-key">${tc.key}</span>
         <div class="tc-card-actions">
-          <div class="status-dot ${tc.status}" title="${label}"></div>
+          <span class="status-badge ${tc.status}">${statusUpper}</span>
           <button class="tc-card-delete-btn" data-tc="${tc.key}" title="Delete ${tc.key}">&times;</button>
         </div>
       </div>
-      <p class="text-sm">${tc.summary || 'No summary'}</p>
-      ${tc.defect_key ? `<span class="badge bg-fail mt-1">${tc.defect_key}</span>` : ''}
+      <p class="text-sm">${tc.summary || 'No summary entered'}</p>
+      ${tc.defect_key ? `<span class="badge text-xs mt-1" style="background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4)">🐛 Defect: ${tc.defect_key}</span>` : ''}
     `;
 
     card.addEventListener('click', (e) => {
@@ -319,7 +355,7 @@ function selectTC(tcKey) {
   $('#detail-tc-key').textContent = tcKey;
   const badge = $('#detail-tc-status');
   badge.textContent = (tc.status || 'pending').toUpperCase();
-  badge.className = `badge ${tc.status === 'pending' ? '' : 'bg-' + tc.status}`;
+  badge.className = `status-badge ${tc.status || 'pending'}`;
 
   $('#tc-summary').value = tc.summary || '';
 
@@ -746,6 +782,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('#btn-fetch-jira-te').addEventListener('click', fetchJiraTE);
   $('#btn-open-jira-te').addEventListener('click', openJiraTE);
+
+  // Search & Filter event listeners
+  const searchInput = $('#tc-search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      searchQuery = e.target.value.trim();
+      renderTCGrid();
+    });
+  }
+
+  document.querySelectorAll('.filter-pill').forEach(pill => {
+    pill.addEventListener('click', (e) => {
+      document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+      e.target.classList.add('active');
+      currentFilter = e.target.getAttribute('data-filter') || 'all';
+      renderTCGrid();
+    });
+  });
 
   $('#te-form').addEventListener('submit', (e) => {
     e.preventDefault();

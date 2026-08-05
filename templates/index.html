@@ -147,10 +147,24 @@
         </div>
       </div>
 
-      <div class="tc-actions mt-2">
-        <button id="btn-show-add-tc" class="btn btn-outline">+ Add TC</button>
-        <button id="btn-add-multiple-tc" class="btn btn-outline">+ Bulk Add</button>
-        <button id="btn-download-poc" class="btn btn-secondary">📄 Download POT Doc (.docx)</button>
+      <div class="tc-actions mt-2 flex-row flex-wrap justify-between">
+        <div class="flex-row gap-2">
+          <button id="btn-show-add-tc" class="btn btn-outline">＋ Add TC</button>
+          <button id="btn-add-multiple-tc" class="btn btn-outline">📋 Bulk Add</button>
+          <button id="btn-download-poc" class="btn btn-secondary">📄 Download POT Doc (.docx)</button>
+        </div>
+        
+        <!-- Filter and Search controls -->
+        <div class="filter-controls flex-row gap-2">
+          <input type="text" id="tc-search-input" placeholder="🔍 Search TCs..." class="search-input">
+          <div class="filter-pills flex-row gap-1">
+            <button class="filter-pill active" data-filter="all">All</button>
+            <button class="filter-pill" data-filter="pending">Pending</button>
+            <button class="filter-pill" data-filter="pass">Pass</button>
+            <button class="filter-pill" data-filter="fail">Fail</button>
+            <button class="filter-pill" data-filter="skip">Skip</button>
+          </div>
+        </div>
       </div>
 
       <div id="add-tc-container" class="hidden flex-row mt-2">
