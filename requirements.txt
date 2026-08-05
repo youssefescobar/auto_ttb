@@ -1,3 +1,4 @@
+flask>=3.0
 google-genai
 playwright
 python-docx

@@ -1,0 +1,47 @@
+{
+  "meta": {
+    "version": "2.0",
+    "description": "Auto TTB Test Executions & Test Cases Database",
+    "last_updated": "2026-08-05T23:06:10.909576"
+  },
+  "test_executions": {
+    "QA-335546": {
+      "te_key": "QA-335546",
+      "created_at": "2026-08-05T21:39:45.525570",
+      "updated_at": "2026-08-05T23:06:10.909571",
+      "tc_count": 6,
+      "test_cases": [
+        {
+          "key": "TC027_AP USER BLOCK USER IN MANAGE USER. CHECK ALL THE PAGES IN LIGHT MODE AND FONT FAMILY",
+          "status": "pass",
+          "summary": "block and unblock user works"
+        },
+        {
+          "key": "TC028_AP USER CHECK MY PROFILE PAGES. CHECK ALL THE PAGES IN LIGHT MODE AND FONT FAMILY",
+          "status": "pass",
+          "summary": "my profile pages"
+        },
+        {
+          "key": "TC032_SAP_SECENDARY AP LOGIN TO VIEW SUB-ADMIN, END USER, SECONDARY AP'S UNDER MANAGE USER TAB.ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "summary": "logged in using SAP user, Manage user looks ok",
+          "status": "pass"
+        },
+        {
+          "key": "TC033_AP_VIEW LOGIN HISTORY. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "summary": "doesnt work, not sure if bug or not",
+          "status": "pending"
+        },
+        {
+          "key": "TC034_AP USER - VIEW MOBILITY SERVICE LINE - LIST. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "summary": "all numbers display correctly according to figma",
+          "status": "pass"
+        },
+        {
+          "key": "TC035_AP USER - MANAGE ALIAS FOR MOBILITY LINES. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
+          "summary": "change a mobility line alias",
+          "status": "pass"
+        }
+      ]
+    }
+  }
+}

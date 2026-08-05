@@ -20,7 +20,7 @@ def run_setup():
     current_jira_user = os.getenv("JIRA_USERNAME", config.JIRA_USERNAME)
     current_project = os.getenv("PROJECT_KEY", config.PROJECT_KEY)
     current_issue_type = os.getenv("DEFECT_ISSUE_TYPE", config.DEFECT_ISSUE_TYPE)
-    current_gemini_key = os.getenv("GEMINI_API_KEY", "")
+    current_gemini_key = os.getenv("GEMINI_API_KEY", config.GEMINI_API_KEY)
     current_gemini_model = os.getenv("GEMINI_MODEL", config.GEMINI_MODEL)
     current_te_key = os.getenv("DEFAULT_TE_KEY", config.DEFAULT_TE_KEY)
     current_title_pattern = os.getenv("DEFECT_TITLE_PATTERN", config.DEFECT_TITLE_PATTERN)
@@ -42,8 +42,7 @@ def run_setup():
     print("\n--- [3/4] Test Execution (TE) & Customization ---")
     default_te = input(f"Default Test Execution (TE) Key [{current_te_key}]: ").strip() or current_te_key
     print("\nDefect Title Format Pattern:")
-    print("Available variables: {TE_KEY}, {TC_KEY}, {AI_TITLE}")
-    print("Example result: '[TE-101][TC-123] Login button unresponsive'")
+    print("Example result: 'LightMode_SIT_Android_ Login screen button overlapping'")
     title_pattern = input(f"Pattern [{current_title_pattern}]: ").strip() or current_title_pattern
 
     # 4. Save to .env file
@@ -80,7 +79,7 @@ DEFECT_TITLE_PATTERN={title_pattern}
 
     print("\n========================================================")
     print(" Setup Complete! You can now run:")
-    print(f"   python main.py --te {default_te} TC-123")
+    print("   start.bat  (or python main.py)")
     print("========================================================\n")
 
 

@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auto TTB v2.0</title>
+  <meta name="description" content="QA Test Execution Automation Dashboard">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧪</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <!-- ============ Top Bar ============ -->
+  <header id="topbar">
+    <div class="logo">
+      <h1>Auto TTB <span class="badge">v2.0</span></h1>
+    </div>
+    <div class="controls">
+      <div class="session-indicator" id="session-dot" title="Session Status"></div>
+      <button id="btn-login" class="btn btn-outline">🔑 Login</button>
+      <button id="btn-save-session" class="btn btn-save-session hidden">💾 Save Jira Session</button>
+      <button id="btn-settings" class="icon-btn" aria-label="Settings">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ============ Settings Panel ============ -->
+  <div id="settings-overlay" class="overlay hidden"></div>
+  <div id="settings-panel" class="side-panel hidden">
+    <div class="panel-header">
+      <h2>Settings & Fixed Jira Boilerplate</h2>
+      <button id="btn-close-settings" class="icon-btn">&times;</button>
+    </div>
+    <div class="panel-content">
+      <form id="settings-form">
+        <h3 class="settings-section-title">Jira Instance & Scope</h3>
+        <div class="form-group">
+          <label>Jira Base URL</label>
+          <input type="text" name="jira_base_url" placeholder="https://jira.company.com">
+        </div>
+        <div class="form-group">
+          <label>Project</label>
+          <input type="text" name="project" placeholder="B2B Digital Revamp (BDR)">
+        </div>
+        <div class="form-group">
+          <label>For Project / Scope</label>
+          <input type="text" name="for_project" placeholder='JK26-3835 Technical project :"B2B Digital Revamp..."'>
+        </div>
+        <div class="form-group">
+          <label>Demo</label>
+          <input type="text" name="demo" placeholder="Demo 1">
+        </div>
+
+        <h3 class="settings-section-title">Defect Classification & Fixed Fields</h3>
+        <div class="form-group">
+          <label>Issue Type</label>
+          <input type="text" name="issue_type" placeholder="Defect">
+        </div>
+        <div class="form-group">
+          <label>Component/s</label>
+          <input type="text" name="components" placeholder="Android">
+        </div>
+        <div class="form-group">
+          <label>Impacted System</label>
+          <input type="text" name="impacted_system" placeholder="Mobile App">
+        </div>
+        <div class="form-group">
+          <label>Defect Type & Filed Against</label>
+          <div class="flex-row gap-2">
+            <input type="text" name="defect_type" placeholder="B2B Digital Revamp">
+            <input type="text" name="filed_against" placeholder="BDR-ANDROID">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Defect Environment</label>
+          <input type="text" name="defect_environment" placeholder="Integration">
+        </div>
+        <div class="form-group">
+          <label>Defect Phase</label>
+          <input type="text" name="defect_phase" placeholder="QA">
+        </div>
+        <div class="form-group">
+          <label>Labels</label>
+          <input type="text" name="labels" placeholder="Lightmode">
+        </div>
+        <div class="form-group">
+          <label>Milestone Type</label>
+          <input type="text" name="milestone_type" placeholder="Batch 1">
+        </div>
+
+        <h3 class="settings-section-title">Title & Transitions</h3>
+        <div class="form-group">
+          <label>Defect Title Prefix</label>
+          <input type="text" name="defect_title_prefix" placeholder="LightMode_SIT_Android_">
+        </div>
+        <div class="form-group">
+          <label>Transition: Executing / Pass / Fail</label>
+          <div class="flex-row gap-2">
+            <input type="text" name="transition_executing" placeholder="Start Progress">
+            <input type="text" name="transition_pass" placeholder="Pass">
+            <input type="text" name="transition_fail" placeholder="Fail">
+          </div>
+        </div>
+
+        <div class="panel-actions">
+          <button type="button" id="btn-save-settings" class="btn btn-primary w-full">Save Settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ Main Content ============ -->
+  <main>
+
+    <!-- Step 1: TE Input -->
+    <section id="te-input-section" class="glass-card">
+      <h2>Test Execution Context</h2>
+      <p>Enter your Test Execution (TE) Key to start processing test cases, or select a saved execution from database.</p>
+      <form id="te-form" class="flex-row mt-2 flex-wrap">
+        <input type="text" id="te-key-input" placeholder="e.g. QA-335480" required>
+        <button type="submit" class="btn btn-primary">Load Session</button>
+        <button type="button" id="btn-fetch-jira-te" class="btn btn-secondary">🔍 Fetch TCs from Jira</button>
+        <button type="button" id="btn-open-jira-te" class="btn btn-outline">🔗 Open in Jira</button>
+      </form>
+
+      <!-- Saved Executions Quick Select -->
+      <div id="saved-tes-container" class="mt-4 hidden">
+        <p class="text-sm text-gray font-weight-500 mb-1">Saved Executions (db.json):</p>
+        <div id="saved-tes-list" class="flex-row gap-2 flex-wrap mt-1"></div>
+      </div>
+    </section>
+
+    <!-- Step 2: TC Grid -->
+    <section id="tc-grid-section" class="hidden">
+      <div class="section-header">
+        <h2 id="tc-grid-title">Test Cases</h2>
+        <div class="progress-container">
+          <span id="tc-progress-text">0/0 done</span>
+          <div class="progress-bar"><div id="tc-progress-fill" class="progress-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="tc-actions mt-2">
+        <button id="btn-show-add-tc" class="btn btn-outline">+ Add TC</button>
+        <button id="btn-add-multiple-tc" class="btn btn-outline">+ Bulk Add</button>
+        <button id="btn-download-poc" class="btn btn-secondary">📄 Download POT Doc (.docx)</button>
+      </div>
+
+      <div id="add-tc-container" class="hidden flex-row mt-2">
+        <input type="text" id="new-tc-input" placeholder="Enter TC key (e.g. TC-12345)">
+        <button id="btn-add-tc-submit" class="btn btn-primary">Add</button>
+      </div>
+      <div id="add-multiple-tc-container" class="hidden mt-2">
+        <textarea id="multiple-tc-input" rows="3" placeholder="Enter TC keys (one per line or comma-separated)"></textarea>
+        <button id="btn-add-multiple-submit" class="btn btn-primary mt-1">Add All</button>
+      </div>
+
+      <div id="tc-grid" class="grid mt-4">
+        <!-- Injected JS -->
+      </div>
+    </section>
+
+    <!-- Step 3: TC Detail Panel (Two Screenshot Categories) -->
+    <section id="tc-detail-section" class="hidden glass-card">
+      <button class="btn btn-text btn-back" onclick="goBackToGrid()">← Back to list</button>
+      <div class="detail-header">
+        <div class="flex-row gap-2">
+          <h2 id="detail-tc-key">TC-XXXXX</h2>
+          <span id="detail-tc-status" class="badge">Pending</span>
+        </div>
+        <button id="btn-delete-tc" class="btn btn-outline text-error-btn">🗑 Delete TC</button>
+      </div>
+
+      <!-- Two Screenshot Upload Areas -->
+      <div class="screenshots-dual-grid mt-2">
+        
+        <!-- Expected Screenshots Dropzone -->
+        <div class="dropzone-box" id="dropzone-box-expected" tabindex="0">
+          <div class="dropzone-header">
+            <h3>Expected Result / Figma Screenshots</h3>
+            <span class="paste-indicator" id="badge-expected">Click/Focus to Target</span>
+          </div>
+          <div id="dropzone-expected" class="dropzone">
+            <div class="dropzone-content">
+              <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+              <p>Drop Expected / Figma images (or Paste here)</p>
+            </div>
+            <input type="file" id="input-expected" multiple accept="image/*" class="hidden">
+          </div>
+          <div id="thumbs-expected" class="thumbnail-grid mt-2"></div>
+        </div>
+
+        <!-- Actual Screenshots Dropzone -->
+        <div class="dropzone-box" id="dropzone-box-actual" tabindex="0">
+          <div class="dropzone-header">
+            <h3>Actual Result / Bug Screenshots</h3>
+            <span class="paste-indicator" id="badge-actual">Click/Focus to Target</span>
+          </div>
+          <div id="dropzone-actual" class="dropzone">
+            <div class="dropzone-content">
+              <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+              <p>Drop Actual Bug images (or Paste here)</p>
+            </div>
+            <input type="file" id="input-actual" multiple accept="image/*" class="hidden">
+          </div>
+          <div id="thumbs-actual" class="thumbnail-grid mt-2"></div>
+        </div>
+
+      </div>
+
+      <!-- Quick Summary / Notes -->
+      <div id="summary-input-area" class="mt-4">
+        <label for="tc-summary">Quick QA Notes / Shorthand Summary</label>
+        <textarea id="tc-summary" rows="3" placeholder="e.g. Enter OTP screen title not matching Figma"></textarea>
+      </div>
+
+      <!-- Action Buttons -->
+      <div id="action-buttons" class="mt-4 flex-row gap-4">
+        <button id="btn-pass" class="btn btn-pass w-full">✅ Pass</button>
+        <button id="btn-fail" class="btn btn-fail w-full">❌ Fail & Draft Defect</button>
+        <button id="btn-save-pot-tc" class="btn btn-secondary w-full">💾 Save to POT Only</button>
+        <button id="btn-skip" class="btn btn-skip">⏭ Skip</button>
+      </div>
+    </section>
+
+    <!-- Step 4: Defect Preview (Matching Real Jira Defect Form) -->
+    <section id="defect-preview-section" class="hidden glass-card">
+      <button class="btn btn-text btn-back" onclick="goBackToGrid()">← Back to list</button>
+      <h2 id="defect-preview-title">Jira Defect Ticket Form Preview</h2>
+
+      <div id="defect-form" class="mt-4 grid-2col">
+        
+        <!-- Main Form Left Col -->
+        <div class="form-col-main">
+          
+          <div class="form-group">
+            <label>Summary (Title) *</label>
+            <input type="text" id="defect-title">
+          </div>
+
+          <div class="form-group">
+            <label>Scenario</label>
+            <textarea id="defect-scenario" rows="3"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Steps to Recreate</label>
+            <textarea id="defect-steps" rows="4"></textarea>
+          </div>
+
+          <div class="flex-row gap-4">
+            <div class="form-group w-full">
+              <label>Expected Result</label>
+              <textarea id="defect-expected" rows="4"></textarea>
+            </div>
+            <div class="form-group w-full">
+              <label>Actual Result</label>
+              <textarea id="defect-actual" rows="4"></textarea>
+            </div>
+          </div>
+
+          <div class="flex-row gap-4">
+            <div class="form-group w-full">
+              <label>Test Data</label>
+              <textarea id="defect-test-data" rows="2" placeholder="e.g. MSISDN: 9665XXXXXXX"></textarea>
+            </div>
+            <div class="form-group w-full">
+              <label>QA Analysis</label>
+              <textarea id="defect-qa-analysis" rows="2" placeholder="e.g. Font family missing in assets"></textarea>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Meta Sidebar Right Col -->
+        <div class="form-col-side">
+          
+          <div class="form-group">
+            <label>Defect Severity *</label>
+            <select id="defect-severity">
+              <option value="1-Low">1-Low</option>
+              <option value="2-Medium">2-Medium</option>
+              <option value="3-High">3-High</option>
+              <option value="4-Critical">4-Critical</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Test Cases Blocked</label>
+            <input type="number" id="defect-blocked-tcs" value="1" min="0">
+          </div>
+
+          <div class="form-group">
+            <label>Assignee</label>
+            <input type="text" id="defect-assignee" placeholder="e.g. Saurabh Shukla">
+          </div>
+
+          <!-- Fixed Fields Collapsible Summary -->
+          <div class="fixed-fields-box mt-2">
+            <h4>Fixed Jira Defaults (Auto-Filled)</h4>
+            <ul class="fixed-fields-list text-sm">
+              <li><b>Project:</b> B2B Digital Revamp (BDR)</li>
+              <li><b>Issue Type:</b> Defect</li>
+              <li><b>For Project:</b> JK26-3835 Technical project...</li>
+              <li><b>Demo:</b> Demo 1</li>
+              <li><b>Component/s:</b> Android</li>
+              <li><b>Impacted System:</b> Mobile App</li>
+              <li><b>Defect Type:</b> B2B Digital Revamp</li>
+              <li><b>Filed Against:</b> BDR-ANDROID</li>
+              <li><b>Environment:</b> Integration</li>
+              <li><b>Defect Phase:</b> QA</li>
+              <li><b>Labels:</b> Lightmode</li>
+              <li><b>Usability / Re-occurrence:</b> No / No</li>
+            </ul>
+          </div>
+
+        </div>
+
+      </div>
+
+      <div id="defect-actions" class="mt-4 flex-row gap-4">
+        <button id="btn-regenerate-defect" class="btn btn-outline flex-1">🔄 Regenerate AI</button>
+        <button id="btn-copy-defect" class="btn btn-outline flex-1">📋 Copy Title & Body</button>
+        <button id="btn-save-pot-defect" class="btn btn-secondary flex-1">💾 Save to POT Doc</button>
+        <button id="btn-submit-defect" class="btn btn-primary flex-2">🚀 Submit to Jira</button>
+      </div>
+
+      <div id="ai-loading" class="overlay hidden">
+        <div class="spinner-container">
+          <div class="spinner"></div>
+          <p>AI is analyzing Expected/Actual screenshots & notes...</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <div id="toast-container"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
