@@ -57,37 +57,42 @@ def _get_or_create_doc(doc_path: str, te_key: str):
     
     doc = Document()
     
-    # Page Margins: 0.75 inch (54 pt) all around
+    # Compact Page Margins: 0.45 inch all around
     for section in doc.sections:
-        section.top_margin = Inches(0.75)
-        section.bottom_margin = Inches(0.75)
-        section.left_margin = Inches(0.75)
-        section.right_margin = Inches(0.75)
+        section.top_margin = Inches(0.45)
+        section.bottom_margin = Inches(0.45)
+        section.left_margin = Inches(0.45)
+        section.right_margin = Inches(0.45)
 
-    # Document Header Table (Clean Header Banner)
+    # Document Header Table (Clean Compact Banner)
     header_tbl = doc.add_table(rows=1, cols=1)
     header_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
     cell = header_tbl.cell(0, 0)
     set_cell_background(cell, "1E293B")  # Dark Slate background
-    set_cell_margins(cell, top=200, bottom=200, left=240, right=240)
+    set_cell_margins(cell, top=80, bottom=80, left=160, right=160)
 
     p1 = cell.paragraphs[0]
     p1.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p1.paragraph_format.space_before = Pt(0)
+    p1.paragraph_format.space_after = Pt(0)
     r1 = p1.add_run("PROOF OF TESTING (POT) REPORT")
     r1.font.name = 'Calibri'
-    r1.font.size = Pt(18)
+    r1.font.size = Pt(12)
     r1.font.bold = True
     r1.font.color.rgb = RGBColor(255, 255, 255)
 
     p2 = cell.add_paragraph()
+    p2.paragraph_format.space_before = Pt(0)
+    p2.paragraph_format.space_after = Pt(0)
     r2 = p2.add_run(f"Test Execution Key: {te_key}  |  Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}")
     r2.font.name = 'Calibri'
-    r2.font.size = Pt(10)
+    r2.font.size = Pt(8.5)
     r2.font.color.rgb = RGBColor(148, 163, 184)
 
     # Spacing after document title
     p_spacer = doc.add_paragraph()
-    p_spacer.paragraph_format.space_after = Pt(12)
+    p_spacer.paragraph_format.space_before = Pt(0)
+    p_spacer.paragraph_format.space_after = Pt(2)
 
     return doc
 
@@ -101,7 +106,7 @@ def append_tc_pot(
     defect_key: str = None
 ):
     """
-    Appends a TC result to the POT doc with side-by-side small, readable images.
+    Appends a compact TC result to the POT doc, enabling 3 TCs per page.
     """
     if not te_key:
         te_key = config.DEFAULT_TE_KEY
@@ -133,60 +138,65 @@ def append_tc_pot(
     cell_left = tbl.cell(0, 0)
     cell_right = tbl.cell(0, 1)
 
-    cell_left.width = Inches(5.2)
-    cell_right.width = Inches(1.8)
+    cell_left.width = Inches(5.8)
+    cell_right.width = Inches(1.7)
 
     set_cell_background(cell_left, "F8FAFC")
     set_cell_background(cell_right, status_bg)
-    set_cell_margins(cell_left, top=120, bottom=120, left=160, right=160)
-    set_cell_margins(cell_right, top=120, bottom=120, left=160, right=160)
+    set_cell_margins(cell_left, top=40, bottom=40, left=100, right=100)
+    set_cell_margins(cell_right, top=40, bottom=40, left=100, right=100)
 
     # TC Title & Info
     p_tc = cell_left.paragraphs[0]
+    p_tc.paragraph_format.space_before = Pt(0)
+    p_tc.paragraph_format.space_after = Pt(0)
     r_tc = p_tc.add_run(f"Test Case: {tc_number}")
     r_tc.font.name = 'Calibri'
-    r_tc.font.size = Pt(13)
+    r_tc.font.size = Pt(10)
     r_tc.font.bold = True
     r_tc.font.color.rgb = RGBColor(15, 23, 42)
 
     if summary:
         p_sum = cell_left.add_paragraph()
+        p_sum.paragraph_format.space_before = Pt(0)
+        p_sum.paragraph_format.space_after = Pt(0)
         r_sum_lbl = p_sum.add_run("Summary: ")
         r_sum_lbl.font.bold = True
-        r_sum_lbl.font.size = Pt(9.5)
+        r_sum_lbl.font.size = Pt(8.5)
         r_sum_lbl.font.color.rgb = RGBColor(71, 85, 105)
         r_sum_txt = p_sum.add_run(summary)
-        r_sum_txt.font.size = Pt(9.5)
+        r_sum_txt.font.size = Pt(8.5)
         r_sum_txt.font.color.rgb = RGBColor(51, 65, 85)
 
     if defect_key:
         p_def = cell_left.add_paragraph()
+        p_def.paragraph_format.space_before = Pt(0)
+        p_def.paragraph_format.space_after = Pt(0)
         r_def_lbl = p_def.add_run("Linked Defect: ")
         r_def_lbl.font.bold = True
-        r_def_lbl.font.size = Pt(9.5)
+        r_def_lbl.font.size = Pt(8.5)
         r_def_lbl.font.color.rgb = RGBColor(185, 28, 28)
         r_def_txt = p_def.add_run(defect_key)
         r_def_txt.font.bold = True
-        r_def_txt.font.size = Pt(9.5)
+        r_def_txt.font.size = Pt(8.5)
         r_def_txt.font.color.rgb = RGBColor(185, 28, 28)
 
     # Status Pill
     p_st = cell_right.paragraphs[0]
     p_st.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_st.paragraph_format.space_before = Pt(0)
+    p_st.paragraph_format.space_after = Pt(0)
     r_st = p_st.add_run(f"[ {status_str} ]")
     r_st.font.name = 'Calibri'
-    r_st.font.size = Pt(12)
+    r_st.font.size = Pt(9.5)
     r_st.font.bold = True
     r_st.font.color.rgb = status_fg
 
-    # Spacing between banner and images
-    p_gap = doc.add_paragraph()
-    p_gap.paragraph_format.space_before = Pt(4)
-    p_gap.paragraph_format.space_after = Pt(4)
-
-    # Image Section — Side by side layout
+    # Image Section — Side by side compact layout
     has_exp = len(expected_shots) > 0
     has_act = len(actual_shots) > 0
+
+    MAX_IMG_HEIGHT = Inches(1.45)
 
     if has_exp and has_act:
         # 2-column side-by-side table comparing Expected vs Actual
@@ -198,70 +208,82 @@ def append_tc_pot(
         c_hdr_exp = img_tbl.cell(0, 0)
         c_hdr_act = img_tbl.cell(0, 1)
 
-        c_hdr_exp.width = Inches(3.4)
-        c_hdr_act.width = Inches(3.4)
+        c_hdr_exp.width = Inches(3.75)
+        c_hdr_act.width = Inches(3.75)
 
         set_cell_background(c_hdr_exp, "F1F5F9")
         set_cell_background(c_hdr_act, "F1F5F9")
-        set_cell_margins(c_hdr_exp, top=80, bottom=80, left=120, right=120)
-        set_cell_margins(c_hdr_act, top=80, bottom=80, left=120, right=120)
+        set_cell_margins(c_hdr_exp, top=30, bottom=30, left=60, right=60)
+        set_cell_margins(c_hdr_act, top=30, bottom=30, left=60, right=60)
 
         p_h1 = c_hdr_exp.paragraphs[0]
+        p_h1.paragraph_format.space_before = Pt(0)
+        p_h1.paragraph_format.space_after = Pt(0)
         r_h1 = p_h1.add_run("Expected Result (Figma / Design)")
         r_h1.font.bold = True
-        r_h1.font.size = Pt(10)
+        r_h1.font.size = Pt(8.5)
         r_h1.font.color.rgb = RGBColor(30, 41, 59)
 
         p_h2 = c_hdr_act.paragraphs[0]
+        p_h2.paragraph_format.space_before = Pt(0)
+        p_h2.paragraph_format.space_after = Pt(0)
         r_h2 = p_h2.add_run("Actual Result (Test Evidence)")
         r_h2.font.bold = True
-        r_h2.font.size = Pt(10)
+        r_h2.font.size = Pt(8.5)
         r_h2.font.color.rgb = RGBColor(30, 41, 59)
 
         # Image Cells
         c_img_exp = img_tbl.cell(1, 0)
         c_img_act = img_tbl.cell(1, 1)
-        c_img_exp.width = Inches(3.4)
-        c_img_act.width = Inches(3.4)
-        set_cell_margins(c_img_exp, top=100, bottom=100, left=100, right=100)
-        set_cell_margins(c_img_act, top=100, bottom=100, left=100, right=100)
+        c_img_exp.width = Inches(3.75)
+        c_img_act.width = Inches(3.75)
+        set_cell_margins(c_img_exp, top=40, bottom=40, left=40, right=40)
+        set_cell_margins(c_img_act, top=40, bottom=40, left=40, right=40)
 
-        IMAGE_WIDTH = Inches(2.2)
+        # Populate Expected images (side-by-side in single paragraph line)
+        p_exp = c_img_exp.paragraphs[0]
+        p_exp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_exp.paragraph_format.space_before = Pt(0)
+        p_exp.paragraph_format.space_after = Pt(0)
 
-        # Populate Expected images
         for idx, img_path in enumerate(expected_shots):
-            p_exp = c_img_exp.paragraphs[0] if idx == 0 else c_img_exp.add_paragraph()
-            p_exp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            if idx > 0:
+                p_exp.add_run("  ")
             try:
                 run = p_exp.add_run()
-                run.add_picture(img_path, width=IMAGE_WIDTH)
+                run.add_picture(img_path, height=MAX_IMG_HEIGHT)
             except Exception as e:
                 p_exp.add_run(f"[Image load error: {e}]")
 
-        # Populate Actual images
+        # Populate Actual images (side-by-side in single paragraph line)
+        p_act = c_img_act.paragraphs[0]
+        p_act.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_act.paragraph_format.space_before = Pt(0)
+        p_act.paragraph_format.space_after = Pt(0)
+
         for idx, img_path in enumerate(actual_shots):
-            p_act = c_img_act.paragraphs[0] if idx == 0 else c_img_act.add_paragraph()
-            p_act.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            if idx > 0:
+                p_act.add_run("  ")
             try:
                 run = p_act.add_run()
-                run.add_picture(img_path, width=IMAGE_WIDTH)
+                run.add_picture(img_path, height=MAX_IMG_HEIGHT)
             except Exception as e:
                 p_act.add_run(f"[Image load error: {e}]")
 
     elif has_exp or has_act:
-        IMAGE_WIDTH = Inches(2.2)
-        # Only one category of images exists (Expected or Actual)
         shots = expected_shots if has_exp else actual_shots
         title_text = "Expected Result (Figma / Design)" if has_exp else "Actual Result (Test Evidence)"
 
         p_lbl = doc.add_paragraph()
+        p_lbl.paragraph_format.space_before = Pt(2)
+        p_lbl.paragraph_format.space_after = Pt(2)
         r_lbl = p_lbl.add_run(title_text)
         r_lbl.font.bold = True
-        r_lbl.font.size = Pt(10.5)
+        r_lbl.font.size = Pt(8.5)
         r_lbl.font.color.rgb = RGBColor(30, 41, 59)
 
-        # Lay images out in a 3-column grid side-by-side
-        num_cols = 3 if len(shots) >= 3 else len(shots)
+        # Lay images out in a grid table
+        num_cols = min(4, len(shots))
         num_rows = (len(shots) + num_cols - 1) // num_cols if num_cols > 0 else 1
         grid_tbl = doc.add_table(rows=num_rows, cols=max(1, num_cols))
         grid_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -271,23 +293,26 @@ def append_tc_pot(
             r_i = idx // num_cols
             c_i = idx % num_cols
             c = grid_tbl.cell(r_i, c_i)
-            c.width = Inches(2.3)
-            set_cell_margins(c, top=80, bottom=80, left=80, right=80)
+            c.width = Inches(7.5 / num_cols)
+            set_cell_margins(c, top=40, bottom=40, left=40, right=40)
             p = c.paragraphs[0]
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.paragraph_format.space_before = Pt(0)
+            p.paragraph_format.space_after = Pt(0)
             try:
                 run = p.add_run()
-                run.add_picture(img_path, width=IMAGE_WIDTH)
+                run.add_picture(img_path, height=MAX_IMG_HEIGHT)
             except Exception as e:
                 p.add_run(f"[Image error: {e}]")
 
     # Divider spacing after TC entry
     p_div = doc.add_paragraph()
-    p_div.paragraph_format.space_before = Pt(12)
-    p_div.paragraph_format.space_after = Pt(12)
+    p_div.paragraph_format.space_before = Pt(2)
+    p_div.paragraph_format.space_after = Pt(2)
 
     doc.save(doc_path)
     print(f"  -> {tc_number} POT entry saved to {doc_path}")
+    return doc_path
     return doc_path
 
 def append_pass(tc_key: str, screenshot_paths: list[str] = None, te_key: str = None, summary: str = ""):

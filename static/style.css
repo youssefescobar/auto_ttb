@@ -645,6 +645,32 @@ main {
 }
 .settings-section-title:first-child { margin-top: 0; }
 
+.checkbox-group {
+  margin-bottom: 1.25rem;
+}
+.checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.9rem !important;
+  color: #e2e8f0 !important;
+}
+.checkbox-label input[type="checkbox"] {
+  width: 1.15rem;
+  height: 1.15rem;
+  accent-color: var(--accent-blue);
+  cursor: pointer;
+}
+.help-text {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+  line-height: 1.35;
+}
+
 /* AI Loading Overlay */
 .spinner-container {
   position: absolute;

@@ -2,13 +2,13 @@
   "meta": {
     "version": "2.0",
     "description": "Auto TTB Test Executions & Test Cases Database",
-    "last_updated": "2026-08-06T00:40:44.142552"
+    "last_updated": "2026-08-06T16:10:21.120044"
   },
   "test_executions": {
     "QA-335546": {
       "te_key": "QA-335546",
       "created_at": "2026-08-05T21:39:45.525570",
-      "updated_at": "2026-08-06T00:40:44.142537",
+      "updated_at": "2026-08-06T16:10:21.120041",
       "tc_count": 20,
       "test_cases": [
         {
@@ -47,9 +47,11 @@
           "summary": "View sim details passed according to figma"
         },
         {
+          "defect_key": "JK26-3835-DRAFT",
           "key": "TC037_AP USER - SEARCH FOR A MOBILITY LINE. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
-          "status": "pending",
-          "summary": "the boarder of the search bar is cut off"
+          "status": "fail",
+          "summary": "the field design doesnt match figma",
+          "tc_number": "QA-335490"
         },
         {
           "key": "TC038_AP USER - VIEW MOBILITY SERVICE LINE - DETAILED OVERVIEW SCREEN. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
@@ -103,12 +105,223 @@
         },
         {
           "key": "TC050_AP USER - SUSPEND SHORT CODES. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
-          "summary": "suspension works, passed",
-          "status": "pass"
+          "status": "pass",
+          "summary": "suspension works, passed"
         },
         {
           "key": "TC051_AP USER - RESUME SHORT CODES. ALL THE PAGE IN LIGHT MODE AND FONT FAMILY",
-          "summary": "short code reactivation works correctly, looks right",
+          "status": "pass",
+          "summary": "short code reactivation works correctly, looks right"
+        }
+      ]
+    },
+    "BDR-22893": {
+      "te_key": "BDR-22893",
+      "created_at": "2026-08-06T11:08:17.004273",
+      "updated_at": "2026-08-06T16:04:28.419530",
+      "tc_count": 29,
+      "test_cases": [
+        {
+          "key": "TC01_AP user login with username and password and OTP.Check All the pages in light mode and Font Family",
+          "name": "TC01_AP user login with username and password and OTP.Check All the pages in light mode and Font Family",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC02_AP_check Inline error message font and light mode display in AP user login page.",
+          "name": "TC02_AP_check Inline error message font and light mode display in AP user login page.",
+          "tc_number": "",
+          "summary": "no inline message only api",
+          "status": "pass"
+        },
+        {
+          "key": "TC03_AP_check API error message font and light mode display in AP user login page.",
+          "name": "TC03_AP_check API error message font and light mode display in AP user login page.",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC04_End user login Mobile number and OTP.Check All the pages in light mode and Font Family",
+          "name": "TC04_End user login Mobile number and OTP.Check All the pages in light mode and Font Family",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC05_AP_check Inline error message font and light mode display in EU user login page.",
+          "name": "TC05_AP_check Inline error message font and light mode display in EU user login page.",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC06_AP_check API error message font and light mode display in EU user login page.",
+          "name": "TC06_AP_check API error message font and light mode display in EU user login page.",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC07_AP user Reset password. Check All the pages in light mode and Font Family",
+          "name": "TC07_AP user Reset password. Check All the pages in light mode and Font Family",
+          "tc_number": "",
+          "summary": "",
+          "status": "pending"
+        },
+        {
+          "key": "TC08_AP_check Inline error message font and light mode display in Reset password page.",
+          "name": "TC08_AP_check Inline error message font and light mode display in Reset password page.",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC010_AP user Update Password. Check All the pages in light mode and Font Family",
+          "name": "TC010_AP user Update Password. Check All the pages in light mode and Font Family",
+          "tc_number": "",
+          "summary": "",
+          "status": "pending"
+        },
+        {
+          "key": "TC011_AP_check Inline error message font and light mode display in Update password page.",
+          "name": "TC011_AP_check Inline error message font and light mode display in Update password page.",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC012_AP_check API error message font and light mode display in Update password page.",
+          "name": "TC012_AP_check API error message font and light mode display in Update password page.",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC013_AP user registering his company. Check All the pages in light mode and Font Family",
+          "name": "TC013_AP user registering his company. Check All the pages in light mode and Font Family",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC016_AP_check Inline error message font and light mode display in user register page.",
+          "name": "TC016_AP_check Inline error message font and light mode display in user register page.",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC017_AP_check API error message font and light mode display in user register page.",
+          "name": "TC017_AP_check API error message font and light mode display in user register page.",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC014_AP user registering his company in OTP page. Check All the pages in light mode and Font Family",
+          "name": "TC014_AP user registering his company in OTP page. Check All the pages in light mode and Font Family",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC015_AP user registering his company in user details page. Check All the pages in light mode and Font Family",
+          "name": "TC015_AP user registering his company in user details page. Check All the pages in light mode and Font Family",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC018_Check Manage user screen in light mode and Font Family",
+          "name": "TC018_Check Manage user screen in light mode and Font Family",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC019_AP_Check Sub admin page in Manage user screen in light mode and Font Family",
+          "name": "TC019_AP_Check Sub admin page in Manage user screen in light mode and Font Family",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC020_AP_Check End user page in Manage user screen in light mode and Font Family",
+          "name": "TC020_AP_Check End user page in Manage user screen in light mode and Font Family",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC021_AP_Check Secondary AP page in Manage user screen in light mode and Font Family",
+          "name": "TC021_AP_Check Secondary AP page in Manage user screen in light mode and Font Family",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC022_AP create Subadmin in Manage user screen. Check All the pages in light mode and Font Family",
+          "name": "TC022_AP create Subadmin in Manage user screen. Check All the pages in light mode and Font Family",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC023_AP_check Inline error message font and light mode display in user Subadmin page.",
+          "name": "TC023_AP_check Inline error message font and light mode display in user Subadmin page.",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC025_AP user Delete Subadmin.Check All the pages in light mode and Font Family",
+          "name": "TC025_AP user Delete Subadmin.Check All the pages in light mode and Font Family",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC026_AP user Reset password Subadmin.Check All the pages in light mode and Font Family",
+          "name": "TC026_AP user Reset password Subadmin.Check All the pages in light mode and Font Family",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC027_AP user Block user in manage user. Check All the pages in light mode and Font Family",
+          "name": "TC027_AP user Block user in manage user. Check All the pages in light mode and Font Family",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC028_AP user Check My Profile pages. Check All the pages in light mode and Font Family",
+          "name": "TC028_AP user Check My Profile pages. Check All the pages in light mode and Font Family",
+          "tc_number": "",
+          "summary": "pass",
+          "status": "pass"
+        },
+        {
+          "key": "TC029_AP user View Mobily representative details page. Check All the pages in light mode and Font Family",
+          "name": "TC029_AP user View Mobily representative details page. Check All the pages in light mode and Font Family",
+          "tc_number": "",
+          "summary": "",
+          "status": "pending"
+        },
+        {
+          "key": "TC031_AP user change account Manager.Check All the page in light mode and Font Family",
+          "name": "TC031_AP user change account Manager.Check All the page in light mode and Font Family",
+          "tc_number": "",
+          "summary": "",
+          "status": "pending"
+        },
+        {
+          "key": "TC032_SAP_Secendary AP login to view Sub-admin, end user, secondary AP's under manage user tab.All the page in light mode and Font Family",
+          "name": "TC032_SAP_Secendary AP login to view Sub-admin, end user, secondary AP's under manage user tab.All the page in light mode and Font Family",
+          "tc_number": "",
+          "summary": "Pass",
           "status": "pass"
         }
       ]

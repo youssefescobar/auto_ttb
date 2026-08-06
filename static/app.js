@@ -67,7 +67,11 @@ async function loadSettings() {
     for (const [key, val] of Object.entries(state.settings)) {
       const el = form.elements[key];
       if (el) {
-        el.value = Array.isArray(val) ? val.join(', ') : (val || '');
+        if (el.type === 'checkbox') {
+          el.checked = Boolean(val);
+        } else {
+          el.value = Array.isArray(val) ? val.join(', ') : (val ?? '');
+        }
       }
     }
   } catch (e) {
@@ -77,8 +81,15 @@ async function loadSettings() {
 
 async function saveSettings() {
   const form = $('#settings-form');
-  const formData = new FormData(form);
-  const data = Object.fromEntries(formData.entries());
+  const data = {};
+  for (const el of form.elements) {
+    if (!el.name) continue;
+    if (el.type === 'checkbox') {
+      data[el.name] = el.checked;
+    } else {
+      data[el.name] = el.value;
+    }
+  }
   
   try {
     await api('POST', '/api/settings', data);
@@ -198,21 +209,28 @@ function renderTCGrid() {
     card.style.animationDelay = `${idx * 0.03}s`;
 
     const statusUpper = (tc.status || 'pending').toUpperCase();
+    const displayName = tc.name || tc.key;
+    const tcNum = tc.tc_number || '';
 
     card.innerHTML = `
       <div class="tc-card-header">
-        <span class="tc-key">${tc.key}</span>
+        <span class="tc-key" title="${displayName}">${displayName}</span>
         <div class="tc-card-actions">
           <span class="status-badge ${tc.status}">${statusUpper}</span>
           <button class="tc-card-delete-btn" data-tc="${tc.key}" title="Delete ${tc.key}">&times;</button>
         </div>
       </div>
       <p class="text-sm">${tc.summary || 'No summary entered'}</p>
-      ${tc.defect_key ? `<span class="badge text-xs mt-1" style="background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4)">🐛 Defect: ${tc.defect_key}</span>` : ''}
+      <div class="flex-row gap-1 align-center mt-2 flex-wrap text-xs">
+        <button class="btn btn-outline btn-xs btn-jira-link" data-tc="${tc.key}" title="${tcNum ? 'Open ' + tcNum + ' in Jira' : 'Set Jira TC Number'}">
+          ${tcNum ? `🔗 ${tcNum}` : '🔗 Add Jira #'}
+        </button>
+        ${tc.defect_key ? `<span class="badge text-xs" style="background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4)">🐛 Defect: ${tc.defect_key}</span>` : ''}
+      </div>
     `;
 
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.tc-card-delete-btn')) return;
+      if (e.target.closest('.tc-card-delete-btn') || e.target.closest('.btn-jira-link')) return;
       selectTC(tc.key);
     });
 
@@ -221,6 +239,14 @@ function renderTCGrid() {
       delBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         deleteTC(tc.key);
+      });
+    }
+
+    const jiraBtn = card.querySelector('.btn-jira-link');
+    if (jiraBtn) {
+      jiraBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openJiraTC(tc.key);
       });
     }
 
@@ -270,25 +296,41 @@ async function loadTE(teKey) {
 
 function addTC(tcKey) {
   if (!tcKey) return;
-  const cleaned = tcKey.trim().toUpperCase();
-  if (state.testCases.find(tc => tc.key === cleaned)) {
+  const raw = tcKey.trim();
+  const cleaned = raw.toUpperCase();
+  if (state.testCases.find(tc => tc.key === raw || tc.name === raw)) {
     showToast('TC already exists', 'error');
     return;
   }
-  state.testCases.push({ key: cleaned, summary: '', status: 'pending' });
+  const isJiraKey = /^QA-\d+$/i.test(cleaned) || /^TC-\d+$/i.test(cleaned);
+  state.testCases.push({
+    key: raw,
+    name: raw,
+    tc_number: isJiraKey ? cleaned : '',
+    summary: '',
+    status: 'pending'
+  });
   saveExecutionState();
   renderTCGrid();
   $('#new-tc-input').value = '';
   hide($('#add-tc-container'));
-  showToast(`Added ${cleaned}`, 'success');
+  showToast(`Added ${raw}`, 'success');
 }
 
 function addMultipleTCs(text) {
-  const keys = text.split(/[\n,]+/).map(k => k.trim().toUpperCase()).filter(Boolean);
+  const items = text.split(/[\n,]+/).map(k => k.trim()).filter(Boolean);
   let added = 0;
-  for (const k of keys) {
-    if (!state.testCases.find(tc => tc.key === k)) {
-      state.testCases.push({ key: k, summary: '', status: 'pending' });
+  for (const raw of items) {
+    const cleaned = raw.toUpperCase();
+    if (!state.testCases.find(tc => tc.key === raw || tc.name === raw)) {
+      const isJiraKey = /^QA-\d+$/i.test(cleaned) || /^TC-\d+$/i.test(cleaned);
+      state.testCases.push({
+        key: raw,
+        name: raw,
+        tc_number: isJiraKey ? cleaned : '',
+        summary: '',
+        status: 'pending'
+      });
       added++;
     }
   }
@@ -352,7 +394,12 @@ function selectTC(tcKey) {
   hide($('#defect-preview-section'));
   show($('#tc-detail-section'));
 
-  $('#detail-tc-key').textContent = tcKey;
+  $('#detail-tc-key').textContent = tc.name || tc.key;
+  const numInput = $('#tc-number-input');
+  if (numInput) {
+    numInput.value = tc.tc_number || '';
+  }
+
   const badge = $('#detail-tc-status');
   badge.textContent = (tc.status || 'pending').toUpperCase();
   badge.className = `status-badge ${tc.status || 'pending'}`;
@@ -361,6 +408,29 @@ function selectTC(tcKey) {
 
   setActiveCategory('actual');
   loadExistingScreenshots(tcKey);
+}
+
+function openJiraTC(tcKey) {
+  const tc = state.testCases.find(t => t.key === tcKey);
+  if (!tc) return;
+
+  let tcNumber = tc.tc_number || '';
+  if (!tcNumber) {
+    const promptVal = prompt(`Enter Jira TC Number for "${tc.name || tc.key}" (e.g. QA-335455):`, '');
+    if (!promptVal || !promptVal.trim()) return;
+    tcNumber = promptVal.trim().toUpperCase();
+    tc.tc_number = tcNumber;
+    saveExecutionState();
+    renderTCGrid();
+    if (state.currentTC === tcKey) {
+      const numInput = $('#tc-number-input');
+      if (numInput) numInput.value = tcNumber;
+    }
+  }
+
+  const baseUrl = (state.settings && state.settings.jira_base_url) ? state.settings.jira_base_url : 'https://jira.prod.mobily.lan';
+  const url = `${baseUrl.replace(/\/$/, '')}/browse/${tcNumber}`;
+  window.open(url, '_blank');
 }
 
 async function loadExistingScreenshots(tcKey) {
@@ -550,8 +620,10 @@ async function passTC() {
   tc.summary = $('#tc-summary').value.trim();
 
   try {
-    await api('POST', '/api/pass-tc', {
+    const res = await api('POST', '/api/pass-tc', {
       tc_key: tc.key,
+      tc_name: tc.name || tc.key,
+      tc_number: tc.tc_number || null,
       te_key: state.teKey,
       summary: tc.summary,
       expected_shots: getShotPaths('expected'),
@@ -559,7 +631,8 @@ async function passTC() {
     });
     tc.status = 'pass';
     saveExecutionState();
-    showToast(`✅ ${state.currentTC} PASSED & Saved to POT`, 'success');
+    const potMsg = res.saved_pot ? ' & Saved to POT' : '';
+    showToast(`✅ ${tc.name || state.currentTC} PASSED${potMsg}`, 'success');
     goBackToGrid();
   } catch (e) {
     showToast(`Pass failed: ${e.message}`, 'error');
@@ -574,6 +647,8 @@ async function savePOTOnly() {
   try {
     await api('POST', '/api/save-pot', {
       tc_key: tc.key,
+      tc_name: tc.name || tc.key,
+      tc_number: tc.tc_number || null,
       te_key: state.teKey,
       status: tc.status.toUpperCase() || 'PASS',
       summary: tc.summary,
@@ -581,7 +656,7 @@ async function savePOTOnly() {
       actual_shots: getShotPaths('actual'),
       defect_key: tc.defect_key || null
     });
-    showToast(`💾 Saved ${tc.key} to POT Word document`, 'success');
+    showToast(`💾 Saved ${tc.name || tc.key} to POT Word document`, 'success');
   } catch (e) {
     showToast(`Save to POT failed: ${e.message}`, 'error');
   }
@@ -647,9 +722,13 @@ async function submitDefect() {
   btn.disabled = true;
   btn.textContent = 'Submitting to Jira...';
 
+  const tc = state.testCases.find(t => t.key === state.currentTC);
+
   try {
     const payload = {
       tc_key: state.currentTC,
+      tc_name: tc ? (tc.name || tc.key) : state.currentTC,
+      tc_number: tc ? (tc.tc_number || null) : null,
       te_key: state.teKey,
       defect_title: $('#defect-title').value,
       scenario: $('#defect-scenario').value,
@@ -667,7 +746,6 @@ async function submitDefect() {
 
     const res = await api('POST', '/api/fail-tc', payload);
 
-    const tc = state.testCases.find(t => t.key === state.currentTC);
     if (tc) {
       tc.status = 'fail';
       tc.summary = $('#tc-summary')?.value?.trim() || tc.summary;
@@ -675,7 +753,8 @@ async function submitDefect() {
     }
 
     saveExecutionState();
-    showToast(`❌ Defect ${res.issue_key} created and saved to POT!`, 'success');
+    const potMsg = res.saved_pot ? ' and saved to POT!' : '!';
+    showToast(`❌ Defect ${res.issue_key} created${potMsg}`, 'success');
     goBackToGrid();
   } catch (e) {
     showToast(`Jira submission failed: ${e.message}. Use "Copy Title & Body" fallback.`, 'error');
@@ -782,6 +861,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('#btn-fetch-jira-te').addEventListener('click', fetchJiraTE);
   $('#btn-open-jira-te').addEventListener('click', openJiraTE);
+
+  const tcNumInput = $('#tc-number-input');
+  if (tcNumInput) {
+    tcNumInput.addEventListener('change', (e) => {
+      const tc = state.testCases.find(t => t.key === state.currentTC);
+      if (tc) {
+        tc.tc_number = e.target.value.trim().toUpperCase();
+        saveExecutionState();
+        renderTCGrid();
+      }
+    });
+  }
+
+  const btnOpenJiraTC = $('#btn-open-jira-tc');
+  if (btnOpenJiraTC) {
+    btnOpenJiraTC.addEventListener('click', () => {
+      if (state.currentTC) {
+        openJiraTC(state.currentTC);
+      }
+    });
+  }
 
   // Search & Filter event listeners
   const searchInput = $('#tc-search-input');

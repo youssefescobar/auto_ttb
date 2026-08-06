@@ -109,6 +109,15 @@
           </div>
         </div>
 
+        <h3 class="settings-section-title">Proof of Testing (POT)</h3>
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" name="auto_save_pot" id="setting-auto-save-pot">
+            <span>Auto-save to POT on Pass / Fail</span>
+          </label>
+          <small class="help-text">When OFF, passing or failing a test case will not automatically save to POT. You can still save manually using the "Save to POT" button.</small>
+        </div>
+
         <div class="panel-actions">
           <button type="button" id="btn-save-settings" class="btn btn-primary w-full">Save Settings</button>
         </div>
@@ -184,12 +193,22 @@
     <!-- Step 3: TC Detail Panel (Two Screenshot Categories) -->
     <section id="tc-detail-section" class="hidden glass-card">
       <button class="btn btn-text btn-back" onclick="goBackToGrid()">← Back to list</button>
-      <div class="detail-header">
-        <div class="flex-row gap-2">
+      <div class="detail-header flex-row justify-between align-center flex-wrap gap-2">
+        <div class="flex-row gap-2 align-center">
           <h2 id="detail-tc-key">TC-XXXXX</h2>
           <span id="detail-tc-status" class="badge">Pending</span>
         </div>
-        <button id="btn-delete-tc" class="btn btn-outline text-error-btn">🗑 Delete TC</button>
+        <div class="flex-row gap-2 align-center">
+          <button id="btn-open-jira-tc" class="btn btn-outline">🔗 Open in Jira</button>
+          <button id="btn-delete-tc" class="btn btn-outline text-error-btn">🗑 Delete TC</button>
+        </div>
+      </div>
+
+      <!-- Jira TC Number Field -->
+      <div class="flex-row gap-2 align-center mt-2 p-2" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;">
+        <label for="tc-number-input" class="text-xs text-muted font-weight-500 white-space-nowrap" style="margin-bottom:0">Jira TC Number (e.g. QA-335455):</label>
+        <input type="text" id="tc-number-input" placeholder="e.g. QA-335455" class="input-sm" style="max-width: 220px; padding: 0.35rem 0.65rem; font-size: 0.85rem;">
+        <span class="text-xs text-muted">Used for searching/opening link in Jira</span>
       </div>
 
       <!-- Two Screenshot Upload Areas -->

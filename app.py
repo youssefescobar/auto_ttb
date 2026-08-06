@@ -189,6 +189,7 @@ def api_save_pot():
     try:
         data = request.json or {}
         tc_key = data.get('tc_key')
+        tc_name = data.get('tc_name') or tc_key
         te_key = data.get('te_key')
         status = data.get('status', 'PASS')
         summary = data.get('summary', '')
@@ -197,7 +198,7 @@ def api_save_pot():
         actual_shots = data.get('actual_shots', [])
 
         doc_path = poc_doc.append_tc_pot(
-            tc_number=tc_key,
+            tc_number=tc_name,
             status=status,
             te_key=te_key,
             summary=summary,
@@ -214,26 +215,35 @@ def api_pass_tc():
     try:
         data = request.json or {}
         tc_key = data.get('tc_key')
+        tc_name = data.get('tc_name') or tc_key
+        tc_number = data.get('tc_number')
         te_key = data.get('te_key')
         expected_shots = data.get('expected_shots', [])
         actual_shots = data.get('actual_shots', [])
 
-        # Auto append to POT
-        poc_doc.append_tc_pot(
-            tc_number=tc_key,
-            status="PASS",
-            te_key=te_key,
-            summary=data.get('summary', 'Test Case Passed'),
-            expected_shots=expected_shots,
-            actual_shots=actual_shots
-        )
+        saved_pot = False
+        # Auto append to POT only if auto_save_pot is enabled
+        if config.get('auto_save_pot', False):
+            poc_doc.append_tc_pot(
+                tc_number=tc_name,
+                status="PASS",
+                te_key=te_key,
+                summary=data.get('summary', 'Test Case Passed'),
+                expected_shots=expected_shots,
+                actual_shots=actual_shots
+            )
+            saved_pot = True
 
-        try:
-            jira_actions.transition_tc(tc_key, config.get('transition_pass', 'Pass'))
-        except Exception as e:
-            print(f"[!] Transition warning: {e}")
+        target_jira_key = tc_number or tc_key
+        if target_jira_key and ("-" in str(target_jira_key) or str(target_jira_key).startswith("QA-") or str(target_jira_key).startswith("TC-")):
+            try:
+                jira_actions.transition_tc(target_jira_key, config.get('transition_pass', 'Pass'))
+            except Exception as e:
+                print(f"[!] Transition warning: {e}")
+        else:
+            print(f"[!] Skipping Jira transition: '{target_jira_key}' is not a valid Jira TC number.")
 
-        return jsonify({"status": "success"})
+        return jsonify({"status": "success", "saved_pot": saved_pot})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -242,6 +252,8 @@ def api_fail_tc():
     try:
         data = request.json or {}
         tc_key = data.get('tc_key')
+        tc_name = data.get('tc_name') or tc_key
+        tc_number = data.get('tc_number')
         te_key = data.get('te_key')
         title = data.get('defect_title')
         
@@ -266,23 +278,41 @@ def api_fail_tc():
             data=data
         )
 
-        # Auto append to POT
-        poc_doc.append_tc_pot(
-            tc_number=tc_key,
-            status="FAIL",
-            te_key=te_key,
-            summary=title,
-            expected_shots=data.get('expected_shots', []),
-            actual_shots=data.get('actual_shots', []),
-            defect_key=issue_key
-        )
+        # Pre-fill comment with screenshot evidence (manual submit by user)
+        if all_shots and issue_key and not str(issue_key).endswith("-DRAFT"):
+            try:
+                jira_actions.add_comment_with_screenshots(
+                    issue_key=issue_key,
+                    comment_text="Test Evidence Screenshots (Expected vs Actual):",
+                    screenshot_paths=all_shots
+                )
+            except Exception as e:
+                print(f"[!] Note on comment creation: {e}")
 
-        try:
-            jira_actions.transition_tc(tc_key, config.get('transition_fail', 'Fail'))
-        except Exception as e:
-            print(f"[!] Transition warning: {e}")
+        saved_pot = False
+        # Auto append to POT only if auto_save_pot is enabled
+        if config.get('auto_save_pot', False):
+            poc_doc.append_tc_pot(
+                tc_number=tc_name,
+                status="FAIL",
+                te_key=te_key,
+                summary=title,
+                expected_shots=data.get('expected_shots', []),
+                actual_shots=data.get('actual_shots', []),
+                defect_key=issue_key
+            )
+            saved_pot = True
 
-        return jsonify({"issue_key": issue_key})
+        target_jira_key = tc_number or tc_key
+        if target_jira_key and ("-" in str(target_jira_key) or str(target_jira_key).startswith("QA-") or str(target_jira_key).startswith("TC-")):
+            try:
+                jira_actions.transition_tc(target_jira_key, config.get('transition_fail', 'Fail'))
+            except Exception as e:
+                print(f"[!] Transition warning: {e}")
+        else:
+            print(f"[!] Skipping Jira transition: '{target_jira_key}' is not a valid Jira TC number.")
+
+        return jsonify({"issue_key": issue_key, "saved_pot": saved_pot})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

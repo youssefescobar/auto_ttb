@@ -59,6 +59,9 @@ TRANSITION_EXECUTING = "Start Progress"
 TRANSITION_PASS = "Pass"
 TRANSITION_FAIL = "Fail"
 
+AUTO_SAVE_POT = False
+AUTO_SUBMIT_DEFECT = False
+
 # --- Local file paths ---------------------------------------------------
 BROWSER_STATE_PATH = "jira_session.json"
 
@@ -88,21 +91,29 @@ _KEY_MAPPING = {
     "transition_executing": "TRANSITION_EXECUTING",
     "transition_pass": "TRANSITION_PASS",
     "transition_fail": "TRANSITION_FAIL",
+    "auto_save_pot": "AUTO_SAVE_POT",
+    "auto_submit_defect": "AUTO_SUBMIT_DEFECT",
 }
 
 def get(key, default=None):
     if key in _runtime_overrides:
-        return _runtime_overrides[key]
-    
-    if key in _KEY_MAPPING:
+        val = _runtime_overrides[key]
+    elif key in _KEY_MAPPING:
         mapping = _KEY_MAPPING[key]
         if isinstance(mapping, tuple):
             dict_name, dict_key = mapping
-            return globals().get(dict_name, {}).get(dict_key, default)
+            val = globals().get(dict_name, {}).get(dict_key, default)
         else:
-            return globals().get(mapping, default)
-    
-    return default
+            val = globals().get(mapping, default)
+    else:
+        val = default
+
+    if isinstance(val, str):
+        if val.lower() == 'true':
+            return True
+        elif val.lower() == 'false':
+            return False
+    return val
 
 def set_override(key, value):
     _runtime_overrides[key] = value
