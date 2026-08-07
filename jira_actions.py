@@ -726,7 +726,7 @@ def create_defect(
                 issue_key = f"{config.PROJECT_KEY}-DRAFT"
 
         print(f"[SUCCESS] Defect issue '{issue_key}' processed in Jira!")
-        browser.close()
+        # Browser intentionally left open — close it manually when done.
         return issue_key
 
 

@@ -9,7 +9,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # --- Jira connection -------------------------------------------------
-JIRA_BASE_URL = os.getenv("JIRA_BASE_URL", "https://jira.prod.mobily.lan/")   # no trailing slash
+JIRA_BASE_URL = os.getenv("JIRA_BASE_URL", "https://jira.prod.mobily.lan").rstrip('/')   # no trailing slash
 JIRA_USERNAME = os.getenv("JIRA_USERNAME", "80129258")                   # domain login
 HEADLESS_BROWSER = False                           # Set False to watch Playwright execute
 
@@ -113,6 +113,9 @@ def get(key, default=None):
             return True
         elif val.lower() == 'false':
             return False
+        # Always strip trailing slash from URL fields
+        if key == 'jira_base_url':
+            return val.rstrip('/')
     return val
 
 def set_override(key, value):

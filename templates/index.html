@@ -177,11 +177,11 @@
       </div>
 
       <div id="add-tc-container" class="hidden flex-row mt-2">
-        <input type="text" id="new-tc-input" placeholder="Enter TC key (e.g. TC-12345)">
+        <input type="text" id="new-tc-input" placeholder="e.g. BDR-22842  TC038_AP User - View Mobility...  (Jira# + TC name)">
         <button id="btn-add-tc-submit" class="btn btn-primary">Add</button>
       </div>
       <div id="add-multiple-tc-container" class="hidden mt-2">
-        <textarea id="multiple-tc-input" rows="3" placeholder="Enter TC keys (one per line or comma-separated)"></textarea>
+        <textarea id="multiple-tc-input" rows="3" placeholder="One per line: BDR-22842  TC038_AP User - View Mobility...&#10;Or just TC keys without a Jira number"></textarea>
         <button id="btn-add-multiple-submit" class="btn btn-primary mt-1">Add All</button>
       </div>
 
@@ -257,7 +257,7 @@
       <!-- Action Buttons -->
       <div id="action-buttons" class="mt-4 flex-row gap-4">
         <button id="btn-pass" class="btn btn-pass w-full">✅ Pass</button>
-        <button id="btn-fail" class="btn btn-fail w-full">❌ Fail & Draft Defect</button>
+        <button id="btn-fail" class="btn btn-fail w-full">❌ Fail</button>
         <button id="btn-save-pot-tc" class="btn btn-secondary w-full">💾 Save to POT Only</button>
         <button id="btn-skip" class="btn btn-skip">⏭ Skip</button>
       </div>
@@ -359,8 +359,9 @@
       </div>
 
       <div id="defect-actions" class="mt-4 flex-row gap-4">
-        <button id="btn-regenerate-defect" class="btn btn-outline flex-1">🔄 Regenerate AI</button>
-        <button id="btn-copy-defect" class="btn btn-outline flex-1">📋 Copy Title & Body</button>
+        <button id="btn-draft-defect" class="btn btn-primary flex-1">🤖 Draft Defect (AI)</button>
+        <button id="btn-regenerate-defect" class="btn btn-outline flex-1">🔄 Regenerate (AI)</button>
+        <button id="btn-copy-defect" class="btn btn-outline flex-1">📋 Copy Title &amp; Body</button>
         <button id="btn-save-pot-defect" class="btn btn-secondary flex-1">💾 Save to POT Doc</button>
         <button id="btn-submit-defect" class="btn btn-primary flex-2">🚀 Submit to Jira</button>
       </div>

@@ -8,8 +8,9 @@ const state = {
   currentTC: null,
   screenshots: { expected: [], actual: [] },
   settings: {},
-  defectDraft: null,
+  defectDrafts: {},  // keyed by TC key, persists drafts without re-calling AI
 };
+
 
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
@@ -294,19 +295,34 @@ async function loadTE(teKey) {
   showToast(`TE ${teKey} loaded`, 'success');
 }
 
+/**
+ * Parses a pasted TC string that may start with a Jira number.
+ * e.g. "BDR-22842    TC038_AP User - View Mobility..." ->
+ *   { jiraNumber: 'BDR-22842', tcKey: 'TC038_AP User - View Mobility...' }
+ * If no leading Jira number, jiraNumber is '' and tcKey is the full string.
+ */
+function parseTC(input) {
+  const trimmed = input.trim();
+  const match = trimmed.match(/^([A-Z]+-\d+)\s+(.+)$/i);
+  if (match) {
+    return { jiraNumber: match[1].toUpperCase(), tcKey: match[2].trim() };
+  }
+  // Also handle plain Jira keys like QA-335480 as the TC itself
+  const isJiraKey = /^[A-Z]+-\d+$/i.test(trimmed);
+  return { jiraNumber: isJiraKey ? trimmed.toUpperCase() : '', tcKey: trimmed };
+}
+
 function addTC(tcKey) {
   if (!tcKey) return;
-  const raw = tcKey.trim();
-  const cleaned = raw.toUpperCase();
-  if (state.testCases.find(tc => tc.key === raw || tc.name === raw)) {
+  const { jiraNumber, tcKey: name } = parseTC(tcKey);
+  if (state.testCases.find(tc => tc.key === name || tc.name === name)) {
     showToast('TC already exists', 'error');
     return;
   }
-  const isJiraKey = /^QA-\d+$/i.test(cleaned) || /^TC-\d+$/i.test(cleaned);
   state.testCases.push({
-    key: raw,
-    name: raw,
-    tc_number: isJiraKey ? cleaned : '',
+    key: name,
+    name: name,
+    tc_number: jiraNumber,
     summary: '',
     status: 'pending'
   });
@@ -314,20 +330,19 @@ function addTC(tcKey) {
   renderTCGrid();
   $('#new-tc-input').value = '';
   hide($('#add-tc-container'));
-  showToast(`Added ${raw}`, 'success');
+  showToast(`Added ${name}${jiraNumber ? ' (' + jiraNumber + ')' : ''}`, 'success');
 }
 
 function addMultipleTCs(text) {
-  const items = text.split(/[\n,]+/).map(k => k.trim()).filter(Boolean);
+  const items = text.split(/\n/).map(k => k.trim()).filter(Boolean);
   let added = 0;
   for (const raw of items) {
-    const cleaned = raw.toUpperCase();
-    if (!state.testCases.find(tc => tc.key === raw || tc.name === raw)) {
-      const isJiraKey = /^QA-\d+$/i.test(cleaned) || /^TC-\d+$/i.test(cleaned);
+    const { jiraNumber, tcKey: name } = parseTC(raw);
+    if (!state.testCases.find(tc => tc.key === name || tc.name === name)) {
       state.testCases.push({
-        key: raw,
-        name: raw,
-        tc_number: isJiraKey ? cleaned : '',
+        key: name,
+        name: name,
+        tc_number: jiraNumber,
         summary: '',
         status: 'pending'
       });
@@ -445,6 +460,20 @@ async function loadExistingScreenshots(tcKey) {
 }
 
 function goBackToGrid() {
+  // Snapshot defect form back to drafts so manual edits persist
+  if (state.currentTC && !$('#defect-preview-section').classList.contains('hidden')) {
+    state.defectDrafts[state.currentTC] = {
+      ...(state.defectDrafts[state.currentTC] || {}),
+      title: $('#defect-title').value,
+      scenario: $('#defect-scenario').value,
+      steps: $('#defect-steps').value,
+      expected: $('#defect-expected').value,
+      actual: $('#defect-actual').value,
+      severity: $('#defect-severity').value,
+      blocked_tcs: $('#defect-blocked-tcs').value,
+      assignee: $('#defect-assignee').value,
+    };
+  }
   hide($('#tc-detail-section'));
   hide($('#defect-preview-section'));
   show($('#tc-grid-section'));
@@ -618,26 +647,29 @@ async function passTC() {
   const tc = state.testCases.find(t => t.key === state.currentTC);
   if (!tc) return;
   tc.summary = $('#tc-summary').value.trim();
+  tc.status = 'pass';
+  saveExecutionState();
 
+  // Always save to POT — no Jira transitions, no browser automation
   try {
-    const res = await api('POST', '/api/pass-tc', {
+    await api('POST', '/api/save-pot', {
       tc_key: tc.key,
       tc_name: tc.name || tc.key,
       tc_number: tc.tc_number || null,
       te_key: state.teKey,
+      status: 'PASS',
       summary: tc.summary,
       expected_shots: getShotPaths('expected'),
-      actual_shots: getShotPaths('actual')
+      actual_shots: getShotPaths('actual'),
+      defect_key: null
     });
-    tc.status = 'pass';
-    saveExecutionState();
-    const potMsg = res.saved_pot ? ' & Saved to POT' : '';
-    showToast(`✅ ${tc.name || state.currentTC} PASSED${potMsg}`, 'success');
-    goBackToGrid();
+    showToast(`✅ ${tc.name || state.currentTC} PASSED & saved to POT`, 'success');
   } catch (e) {
-    showToast(`Pass failed: ${e.message}`, 'error');
+    showToast(`✅ ${tc.name || state.currentTC} PASSED (POT save failed: ${e.message})`, 'warning');
   }
+  goBackToGrid();
 }
+
 
 async function savePOTOnly() {
   const tc = state.testCases.find(t => t.key === state.currentTC);
@@ -673,10 +705,62 @@ async function skipTC() {
 }
 
 async function failTC() {
-  const summary = $('#tc-summary').value.trim();
+  // Just mark as fail and open the defect preview page blank.
+  // AI drafting is triggered separately via the "Draft Defect" button.
+  const tc = state.testCases.find(t => t.key === state.currentTC);
+  if (!tc) return;
+  tc.summary = $('#tc-summary').value.trim();
+  tc.status = 'fail';
+  saveExecutionState();
+
+  hide($('#tc-detail-section'));
+  show($('#defect-preview-section'));
+  $('#defect-preview-title').textContent = `Jira Defect Ticket Preview — ${state.currentTC}`;
+
+  const existingDraft = state.defectDrafts[state.currentTC];
+  if (existingDraft) {
+    // Restore persisted draft without calling AI
+    populateDefectForm(existingDraft);
+    showToast('📋 Restored previous draft', 'info');
+  } else {
+    // Open blank — user must click "Draft Defect" to trigger AI
+    clearDefectForm();
+  }
+}
+
+/** Populate defect form fields from a draft object */
+function populateDefectForm(defect) {
+  $('#defect-title').value = defect.title || '';
+  $('#defect-scenario').value = defect.scenario || '';
+  $('#defect-steps').value = defect.steps || '';
+  $('#defect-expected').value = defect.expected || '';
+  $('#defect-actual').value = defect.actual || '';
+  if (defect.severity) $('#defect-severity').value = defect.severity;
+  if (defect.blocked_tcs !== undefined) $('#defect-blocked-tcs').value = defect.blocked_tcs;
+  if (defect.assignee) $('#defect-assignee').value = defect.assignee;
+}
+
+/** Clear defect form to a blank state */
+function clearDefectForm() {
+  $('#defect-title').value = '';
+  $('#defect-scenario').value = '';
+  $('#defect-steps').value = '';
+  $('#defect-expected').value = '';
+  $('#defect-actual').value = '';
+  $('#defect-test-data').value = '';
+  $('#defect-qa-analysis').value = '';
+  $('#defect-severity').value = '1-Low';
+  $('#defect-blocked-tcs').value = '1';
+  $('#defect-assignee').value = 'Saurabh Shukla';
+}
+
+/** Call AI to generate defect draft — saves result per-TC so it persists */
+async function draftDefect() {
+  const tc = state.testCases.find(t => t.key === state.currentTC);
+  const summary = tc?.summary || $('#tc-summary')?.value?.trim() || '';
+
   if (!summary) {
-    showToast('Please enter brief QA Notes / summary of the issue', 'error');
-    $('#tc-summary').focus();
+    showToast('Add QA Notes / summary on the TC screen first before drafting', 'error');
     return;
   }
 
@@ -691,31 +775,22 @@ async function failTC() {
       actual_shots: getShotPaths('actual')
     });
 
-    state.defectDraft = defect;
-
-    hide($('#tc-detail-section'));
-    show($('#defect-preview-section'));
-
-    $('#defect-preview-title').textContent = `Jira Defect Ticket Preview — ${state.currentTC}`;
-    $('#defect-title').value = defect.title || '';
-    $('#defect-scenario').value = defect.scenario || '';
-    $('#defect-steps').value = defect.steps || '';
-    $('#defect-expected').value = defect.expected || '';
-    $('#defect-actual').value = defect.actual || '';
-    $('#defect-severity').value = '1-Low';
-    $('#defect-blocked-tcs').value = '1';
-    $('#defect-assignee').value = 'Saurabh Shukla';
+    // Persist draft for this TC
+    state.defectDrafts[state.currentTC] = defect;
+    populateDefectForm(defect);
 
     if (defect.ai_error) {
-      showToast(`⚠️ AI API Error: ${defect.ai_error}. Loaded default template fallback.`, 'error');
+      showToast(`⚠️ AI error: ${defect.ai_error}. Loaded fallback template.`, 'error');
+    } else {
+      showToast('🤖 Defect drafted by AI', 'success');
     }
-
   } catch (e) {
     showToast(`AI generation failed: ${e.message}`, 'error');
   } finally {
     hide($('#ai-loading'));
   }
 }
+
 
 async function submitDefect() {
   const btn = $('#btn-submit-defect');
@@ -753,6 +828,8 @@ async function submitDefect() {
     }
 
     saveExecutionState();
+    // Clear the persisted draft since it was successfully submitted
+    delete state.defectDrafts[state.currentTC];
     const potMsg = res.saved_pot ? ' and saved to POT!' : '!';
     showToast(`❌ Defect ${res.issue_key} created${potMsg}`, 'success');
     goBackToGrid();
@@ -928,7 +1005,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.currentTC) deleteTC(state.currentTC);
   });
 
-  $('#btn-regenerate-defect').addEventListener('click', failTC);
+  $('#btn-draft-defect').addEventListener('click', draftDefect);
+  $('#btn-regenerate-defect').addEventListener('click', draftDefect);
+
   $('#btn-copy-defect').addEventListener('click', copyDefectToClipboard);
   $('#btn-save-pot-defect').addEventListener('click', savePOTOnly);
   $('#btn-submit-defect').addEventListener('click', submitDefect);
