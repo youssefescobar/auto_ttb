@@ -17,8 +17,30 @@ from defect_draft import (
     build_full_defect_description,
     draft_defect_sections,
     generate_defect_title,
-    review_and_edit,
 )
+
+
+def review_and_edit(summary, body):
+    print("\n--- Review Defect ---")
+    print(f"TITLE: {summary}")
+    print(f"BODY:\n{body}")
+    while True:
+        choice = input("Accept (a), Edit title (t), Edit body (b), or Cancel (c)? [a/t/b/c]: ").strip().lower()
+        if choice == 'a':
+            return summary, body
+        elif choice == 't':
+            summary = input("New title: ").strip() or summary
+        elif choice == 'b':
+            print("Enter new body (type 'END' on a new line to finish):")
+            lines = []
+            while True:
+                line = input()
+                if line == "END":
+                    break
+                lines.append(line)
+            body = "\n".join(lines)
+        elif choice == 'c':
+            raise KeyboardInterrupt
 
 
 def check_session():
@@ -120,19 +142,19 @@ def run_interactive_wizard(tc_key: str = None, te_key: str = None):
         print("\nGenerating AI Defect Title & Structured Content with Gemini...")
         
         # Title starts with LightMode_SIT_Android_
-        proposed_summary = generate_defect_title(notes, tc_key=tc_key, te_key=te_key, screenshot_paths=shots)
+        proposed_summary = generate_defect_title(notes, tc_key=tc_key, te_key=te_key, actual_shots=shots)
         
         # AI generates Scenario, Steps to Recreate, Expected Result, Actual Result
-        ai_sections = draft_defect_sections(notes, screenshot_paths=shots)
+        ai_sections = draft_defect_sections(notes, actual_shots=shots)
 
         # Assemble full body including Demo 1, Technical Project, Severity, Blocked TCs, Assignee, Test Data, QA Analysis
         full_description = build_full_defect_description(
-            severity=severity,
-            blocked_tcs=blocked_tcs,
-            assignee=assignee,
+            scenario=ai_sections.get('scenario',''),
+            steps=ai_sections.get('steps',''),
+            expected=ai_sections.get('expected',''),
+            actual=ai_sections.get('actual',''),
             test_data=test_data,
             qa_analysis=qa_analysis,
-            ai_sections=ai_sections,
         )
 
         try:

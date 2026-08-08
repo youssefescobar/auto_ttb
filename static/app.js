@@ -17,6 +17,76 @@ const $$ = s => document.querySelectorAll(s);
 const show = el => { if (el) el.classList.remove('hidden'); };
 const hide = el => { if (el) el.classList.add('hidden'); };
 
+function advanceToNextTC() {
+  const nextPending = state.testCases.find(tc => tc.key !== state.currentTC && tc.status === 'pending');
+  if (nextPending) {
+    showToast(`Auto-advancing to ${nextPending.name || nextPending.key}`, 'info');
+    selectTC(nextPending.key);
+  } else {
+    goBackToGrid();
+  }
+}
+
+let lightboxImages = [];
+let lightboxIndex = 0;
+
+function openLightbox(images, index) {
+  lightboxImages = images;
+  lightboxIndex = index;
+  const overlay = $('#lightbox-overlay');
+  const img = $('#lightbox-img');
+  const caption = $('#lightbox-caption');
+  if (!overlay || !img) return;
+  img.src = images[index].url;
+  if (caption) caption.textContent = `${images[index].category || ''} — ${index + 1} of ${images.length}`;
+  overlay.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox() {
+  const overlay = $('#lightbox-overlay');
+  if (overlay) overlay.classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function lightboxNav(dir) {
+  lightboxIndex = (lightboxIndex + dir + lightboxImages.length) % lightboxImages.length;
+  const img = $('#lightbox-img');
+  const caption = $('#lightbox-caption');
+  if (img) img.src = lightboxImages[lightboxIndex].url;
+  if (caption) caption.textContent = `${lightboxImages[lightboxIndex].category || ''} — ${lightboxIndex + 1} of ${lightboxImages.length}`;
+}
+
+function setupAutoResize(selector) {
+  const textareas = document.querySelectorAll(selector);
+  textareas.forEach(ta => {
+    ta.addEventListener('input', () => {
+      ta.style.height = 'auto';
+      ta.style.height = Math.min(ta.scrollHeight, 400) + 'px';
+    });
+  });
+}
+
+function updateFixedFieldsDisplay() {
+  const list = document.querySelector('.fixed-fields-list');
+  if (!list) return;
+  const s = state.settings;
+  list.innerHTML = `
+    <li><b>Project:</b> ${s.project || 'B2B Digital Revamp (BDR)'}</li>
+    <li><b>Issue Type:</b> ${s.issue_type || 'Defect'}</li>
+    <li><b>For Project:</b> ${s.for_project || 'JK26-3835 Technical project...'}</li>
+    <li><b>Demo:</b> ${s.demo || 'Demo 1'}</li>
+    <li><b>Component/s:</b> ${s.components || 'Android'}</li>
+    <li><b>Impacted System:</b> ${s.impacted_system || 'Mobile App'}</li>
+    <li><b>Defect Type:</b> ${s.defect_type || 'B2B Digital Revamp'}</li>
+    <li><b>Filed Against:</b> ${s.filed_against || 'BDR-ANDROID'}</li>
+    <li><b>Environment:</b> ${s.defect_environment || 'Integration'}</li>
+    <li><b>Defect Phase:</b> ${s.defect_phase || 'QA'}</li>
+    <li><b>Labels:</b> ${s.labels || 'Lightmode'}</li>
+    <li><b>Usability / Re-occurrence:</b> No / No</li>
+  `;
+}
+
 async function api(method, url, data = null) {
   const opts = { method, headers: {} };
   if (data) {
@@ -75,6 +145,7 @@ async function loadSettings() {
         }
       }
     }
+    updateFixedFieldsDisplay();
   } catch (e) {
     console.error('Failed to load settings:', e);
   }
@@ -95,6 +166,7 @@ async function saveSettings() {
   try {
     await api('POST', '/api/settings', data);
     state.settings = { ...state.settings, ...data };
+    updateFixedFieldsDisplay();
     showToast('Settings & Jira defaults saved', 'success');
     toggleSettings(false);
   } catch (e) {
@@ -108,6 +180,16 @@ async function checkSession() {
     const dot = $('#session-dot');
     const loginBtn = $('#btn-login');
     const saveBtn = $('#btn-save-session');
+
+    if (res.exists && res.mtime) {
+      const ageHours = (Date.now() / 1000 - res.mtime) / 3600;
+      if (ageHours > 6) {
+        const ageStr = ageHours > 24 ? `${Math.floor(ageHours / 24)}d ago` : `${Math.floor(ageHours)}h ago`;
+        if (dot) { dot.className = 'session-indicator warning'; dot.title = `Session may be expired (saved ${ageStr})`; }
+        if (loginBtn) { show(loginBtn); loginBtn.textContent = `⚠️ Session Old (${ageStr})`; }
+        return; // skip the normal status display below
+      }
+    }
 
     if (res.status === 'open') {
       if (dot) { dot.className = 'session-indicator warning'; dot.title = 'Browser open — log into Jira, then click Save Jira Session'; }
@@ -207,6 +289,7 @@ function renderTCGrid() {
   filtered.forEach((tc, idx) => {
     const card = document.createElement('div');
     card.className = 'tc-card';
+    card.setAttribute('data-status', tc.status || 'pending');
     card.style.animationDelay = `${idx * 0.03}s`;
 
     const statusUpper = (tc.status || 'pending').toUpperCase();
@@ -291,6 +374,10 @@ async function loadTE(teKey) {
   $('#tc-grid-title').textContent = `Test Cases — ${teKey}`;
   hide($('#te-input-section'));
   show($('#tc-grid-section'));
+  const breadcrumb = $('#breadcrumb');
+  const breadcrumbTE = $('#breadcrumb-te');
+  if (breadcrumb) { show(breadcrumb); }
+  if (breadcrumbTE) { breadcrumbTE.textContent = teKey; }
   renderTCGrid();
   showToast(`TE ${teKey} loaded`, 'success');
 }
@@ -459,6 +546,17 @@ async function loadExistingScreenshots(tcKey) {
   renderThumbnails('actual');
 }
 
+function goHome() {
+  hide($('#tc-grid-section'));
+  hide($('#tc-detail-section'));
+  hide($('#defect-preview-section'));
+  show($('#te-input-section'));
+  state.currentTC = null;
+  const breadcrumb = $('#breadcrumb');
+  if (breadcrumb) hide(breadcrumb);
+  loadSavedTEs();
+}
+
 function goBackToGrid() {
   // Snapshot defect form back to drafts so manual edits persist
   if (state.currentTC && !$('#defect-preview-section').classList.contains('hidden')) {
@@ -605,6 +703,16 @@ function renderThumbnails(cat) {
       <img src="${shot.url}" alt="${cat} ${index + 1}">
       <button class="thumb-remove" data-cat="${cat}" data-index="${index}">&times;</button>
     `;
+    const img = thumb.querySelector('img');
+    if (img) {
+      img.style.cursor = 'zoom-in';
+      img.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const allShots = [...(state.screenshots.expected || []).map(s => ({...s, category: 'Expected'})), ...(state.screenshots.actual || []).map(s => ({...s, category: 'Actual'}))];
+        const globalIndex = cat === 'expected' ? index : (state.screenshots.expected || []).length + index;
+        openLightbox(allShots, globalIndex);
+      });
+    }
     container.appendChild(thumb);
   });
 
@@ -667,30 +775,21 @@ async function passTC() {
   } catch (e) {
     showToast(`✅ ${tc.name || state.currentTC} PASSED (POT save failed: ${e.message})`, 'warning');
   }
-  goBackToGrid();
+  advanceToNextTC();
 }
 
 
-async function savePOTOnly() {
-  const tc = state.testCases.find(t => t.key === state.currentTC);
-  if (!tc) return;
-  tc.summary = $('#tc-summary').value.trim();
-
+async function generatePOT() {
+  if (!state.teKey) { showToast('No TE loaded', 'error'); return; }
+  const btn = $('#btn-rebuild-pot');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating...'; }
   try {
-    await api('POST', '/api/save-pot', {
-      tc_key: tc.key,
-      tc_name: tc.name || tc.key,
-      tc_number: tc.tc_number || null,
-      te_key: state.teKey,
-      status: tc.status.toUpperCase() || 'PASS',
-      summary: tc.summary,
-      expected_shots: getShotPaths('expected'),
-      actual_shots: getShotPaths('actual'),
-      defect_key: tc.defect_key || null
-    });
-    showToast(`💾 Saved ${tc.name || tc.key} to POT Word document`, 'success');
+    const res = await api('POST', '/api/rebuild-pot', { te_key: state.teKey });
+    showToast(`📄 POT generated with ${res.tc_count} test cases`, 'success');
   } catch (e) {
-    showToast(`Save to POT failed: ${e.message}`, 'error');
+    showToast(`POT generation failed: ${e.message}`, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📄 Generate POT'; }
   }
 }
 
@@ -701,7 +800,7 @@ async function skipTC() {
   tc.status = 'skip';
   saveExecutionState();
   showToast(`⏭ ${state.currentTC} skipped`, 'info');
-  goBackToGrid();
+  advanceToNextTC();
 }
 
 async function failTC() {
@@ -726,6 +825,7 @@ async function failTC() {
     // Open blank — user must click "Draft Defect" to trigger AI
     clearDefectForm();
   }
+  updateFixedFieldsDisplay();
 }
 
 /** Populate defect form fields from a draft object */
@@ -793,6 +893,7 @@ async function draftDefect() {
 
 
 async function submitDefect() {
+  if (!confirm('Submit this defect to Jira? This will open a Playwright browser and fill the Jira form.')) return;
   const btn = $('#btn-submit-defect');
   btn.disabled = true;
   btn.textContent = 'Submitting to Jira...';
@@ -855,6 +956,35 @@ function downloadPOC() {
   window.open(`/api/download-poc/${state.teKey}`, '_blank');
 }
 
+async function deleteTE(teKey) {
+  const targetKey = teKey || state.teKey;
+  if (!targetKey) {
+    showToast('No Test Execution selected to delete', 'error');
+    return;
+  }
+
+  const confirmed = confirm(
+    `⚠️ Are you sure you want to PERMANENTLY delete Test Execution "${targetKey}"?\n\n` +
+    `This will delete all saved test cases, uploaded screenshots, state files, and Word POT documents from your computer.`
+  );
+  if (!confirmed) return;
+
+  try {
+    const res = await api('DELETE', `/api/te/${targetKey}`);
+    if (res.status === 'deleted') {
+      showToast(`🗑 Deleted Test Execution ${targetKey} and all associated files`, 'info');
+      if (state.teKey === targetKey) {
+        goHome();
+      }
+      await loadSavedTEs();
+    } else {
+      showToast(`Delete failed: ${res.error || 'TE not found'}`, 'error');
+    }
+  } catch (e) {
+    showToast(`Delete failed: ${e.message}`, 'error');
+  }
+}
+
 async function loadSavedTEs() {
   try {
     const tes = await api('GET', '/api/te-list');
@@ -871,18 +1001,29 @@ async function loadSavedTEs() {
     list.innerHTML = '';
 
     tes.forEach(te => {
-      const chip = document.createElement('button');
-      chip.className = 'btn te-chip';
-      chip.type = 'button';
-      chip.innerHTML = `
-        <span>${te.te_key}</span>
-        <span class="badge text-xs">${te.tc_count} TCs</span>
+      const wrapper = document.createElement('div');
+      wrapper.className = 'te-chip-wrapper';
+      wrapper.innerHTML = `
+        <button type="button" class="btn te-chip">
+          <span>${te.te_key}</span>
+          <span class="badge text-xs">${te.tc_count} TCs</span>
+        </button>
+        <button type="button" class="te-chip-delete" title="Delete ${te.te_key} and all files">&times;</button>
       `;
-      chip.addEventListener('click', () => {
+
+      const chipBtn = wrapper.querySelector('.te-chip');
+      chipBtn.addEventListener('click', () => {
         $('#te-key-input').value = te.te_key;
         loadTE(te.te_key);
       });
-      list.appendChild(chip);
+
+      const delBtn = wrapper.querySelector('.te-chip-delete');
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteTE(te.te_key);
+      });
+
+      list.appendChild(wrapper);
     });
   } catch (e) {}
 }
@@ -922,6 +1063,52 @@ async function fetchJiraTE() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('keydown', (e) => {
+    const tag = document.activeElement?.tagName;
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return;
+    
+    const lightbox = $('#lightbox-overlay');
+    if (lightbox && !lightbox.classList.contains('hidden')) {
+      if (e.key === 'Escape') { e.preventDefault(); closeLightbox(); return; }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); lightboxNav(-1); return; }
+      if (e.key === 'ArrowRight') { e.preventDefault(); lightboxNav(1); return; }
+    }
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      goBackToGrid();
+      return;
+    }
+    
+    if ($('#tc-detail-section') && !$('#tc-detail-section').classList.contains('hidden')) {
+      if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); passTC(); }
+      if (e.ctrlKey && e.shiftKey && e.key === 'Enter') { e.preventDefault(); failTC(); }
+      if (e.ctrlKey && e.key === 's') { e.preventDefault(); savePOTOnly(); }
+    }
+    
+    if ($('#defect-preview-section') && !$('#defect-preview-section').classList.contains('hidden')) {
+      if (e.ctrlKey && e.shiftKey && e.key === 'd') { e.preventDefault(); draftDefect(); }
+    }
+  });
+
+  // Paste URL auto-detection
+  const teInput = $('#te-key-input');
+  if (teInput) {
+    teInput.addEventListener('paste', (e) => {
+      setTimeout(() => {
+        const val = teInput.value.trim();
+        if (val.includes('/browse/')) {
+          const key = val.split('/browse/').pop().split('?')[0].split('#')[0].trim();
+          if (key) {
+            teInput.value = key;
+            showToast(`Detected TE key: ${key} — fetching from Jira...`, 'info');
+            fetchJiraTE();
+          }
+        }
+      }, 50);
+    });
+  }
+
   loadSettings();
   checkSession();
   loadSavedTEs();
@@ -929,15 +1116,29 @@ document.addEventListener('DOMContentLoaded', () => {
   setupDropZone('actual');
   setupPasteHandler();
 
-  $('#btn-settings').addEventListener('click', () => toggleSettings(true));
-  $('#btn-close-settings').addEventListener('click', () => toggleSettings(false));
-  $('#settings-overlay').addEventListener('click', () => toggleSettings(false));
-  $('#btn-save-settings').addEventListener('click', saveSettings);
-  $('#btn-login').addEventListener('click', handleLogin);
-  $('#btn-save-session').addEventListener('click', handleSaveSession);
+  const btnSettings = $('#btn-settings');
+  if (btnSettings) btnSettings.addEventListener('click', () => toggleSettings(true));
+  
+  const btnCloseSettings = $('#btn-close-settings');
+  if (btnCloseSettings) btnCloseSettings.addEventListener('click', () => toggleSettings(false));
+  
+  const settingsOverlay = $('#settings-overlay');
+  if (settingsOverlay) settingsOverlay.addEventListener('click', () => toggleSettings(false));
+  
+  const btnSaveSettings = $('#btn-save-settings');
+  if (btnSaveSettings) btnSaveSettings.addEventListener('click', saveSettings);
+  
+  const btnLogin = $('#btn-login');
+  if (btnLogin) btnLogin.addEventListener('click', handleLogin);
+  
+  const btnSaveSession = $('#btn-save-session');
+  if (btnSaveSession) btnSaveSession.addEventListener('click', handleSaveSession);
 
-  $('#btn-fetch-jira-te').addEventListener('click', fetchJiraTE);
-  $('#btn-open-jira-te').addEventListener('click', openJiraTE);
+  const btnFetchJiraTe = $('#btn-fetch-jira-te');
+  if (btnFetchJiraTe) btnFetchJiraTe.addEventListener('click', fetchJiraTE);
+  
+  const btnOpenJiraTe = $('#btn-open-jira-te');
+  if (btnOpenJiraTe) btnOpenJiraTe.addEventListener('click', openJiraTE);
 
   const tcNumInput = $('#tc-number-input');
   if (tcNumInput) {
@@ -960,7 +1161,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Search & Filter event listeners
   const searchInput = $('#tc-search-input');
   if (searchInput) {
     searchInput.addEventListener('input', (e) => {
@@ -978,37 +1178,72 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  $('#te-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    loadTE($('#te-key-input').value.trim());
-  });
+  const teForm = $('#te-form');
+  if (teForm) {
+    teForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      loadTE($('#te-key-input').value.trim());
+    });
+  }
 
-  $('#btn-show-add-tc').addEventListener('click', () => {
-    $('#add-tc-container').classList.toggle('hidden');
-    hide($('#add-multiple-tc-container'));
-  });
-  $('#btn-add-multiple-tc').addEventListener('click', () => {
-    $('#add-multiple-tc-container').classList.toggle('hidden');
-    hide($('#add-tc-container'));
-  });
-  $('#btn-add-tc-submit').addEventListener('click', () => addTC($('#new-tc-input').value.trim()));
-  $('#btn-add-multiple-submit').addEventListener('click', () => addMultipleTCs($('#multiple-tc-input').value));
+  const btnShowAddTc = $('#btn-show-add-tc');
+  if (btnShowAddTc) {
+    btnShowAddTc.addEventListener('click', () => {
+      $('#add-tc-container').classList.toggle('hidden');
+      hide($('#add-multiple-tc-container'));
+    });
+  }
 
-  $('#btn-download-poc').addEventListener('click', downloadPOC);
+  const btnAddMultipleTc = $('#btn-add-multiple-tc');
+  if (btnAddMultipleTc) {
+    btnAddMultipleTc.addEventListener('click', () => {
+      $('#add-multiple-tc-container').classList.toggle('hidden');
+      hide($('#add-tc-container'));
+    });
+  }
 
-  $('#btn-pass').addEventListener('click', passTC);
-  $('#btn-fail').addEventListener('click', failTC);
-  $('#btn-save-pot-tc').addEventListener('click', savePOTOnly);
-  $('#btn-skip').addEventListener('click', skipTC);
+  const btnAddTcSubmit = $('#btn-add-tc-submit');
+  if (btnAddTcSubmit) btnAddTcSubmit.addEventListener('click', () => addTC($('#new-tc-input').value.trim()));
+  
+  const btnAddMultipleSubmit = $('#btn-add-multiple-submit');
+  if (btnAddMultipleSubmit) btnAddMultipleSubmit.addEventListener('click', () => addMultipleTCs($('#multiple-tc-input').value));
 
-  $('#btn-delete-tc').addEventListener('click', () => {
-    if (state.currentTC) deleteTC(state.currentTC);
-  });
+  const btnDownloadPoc = $('#btn-download-poc');
+  if (btnDownloadPoc) btnDownloadPoc.addEventListener('click', downloadPOC);
 
-  $('#btn-draft-defect').addEventListener('click', draftDefect);
-  $('#btn-regenerate-defect').addEventListener('click', draftDefect);
+  const btnDeleteTe = $('#btn-delete-te');
+  if (btnDeleteTe) btnDeleteTe.addEventListener('click', () => deleteTE(state.teKey));
 
-  $('#btn-copy-defect').addEventListener('click', copyDefectToClipboard);
-  $('#btn-save-pot-defect').addEventListener('click', savePOTOnly);
-  $('#btn-submit-defect').addEventListener('click', submitDefect);
+  const btnPass = $('#btn-pass');
+  if (btnPass) btnPass.addEventListener('click', passTC);
+  
+  const btnFail = $('#btn-fail');
+  if (btnFail) btnFail.addEventListener('click', failTC);
+  
+  const btnSkip = $('#btn-skip');
+  if (btnSkip) btnSkip.addEventListener('click', skipTC);
+
+  const btnDeleteTc = $('#btn-delete-tc');
+  if (btnDeleteTc) {
+    btnDeleteTc.addEventListener('click', () => {
+      if (state.currentTC) deleteTC(state.currentTC);
+    });
+  }
+
+  const btnDraftDefect = $('#btn-draft-defect');
+  if (btnDraftDefect) btnDraftDefect.addEventListener('click', draftDefect);
+  
+  const btnRegenerateDefect = $('#btn-regenerate-defect');
+  if (btnRegenerateDefect) btnRegenerateDefect.addEventListener('click', draftDefect);
+
+  const btnCopyDefect = $('#btn-copy-defect');
+  if (btnCopyDefect) btnCopyDefect.addEventListener('click', copyDefectToClipboard);
+  
+  const btnSubmitDefect = $('#btn-submit-defect');
+  if (btnSubmitDefect) btnSubmitDefect.addEventListener('click', submitDefect);
+
+  const btnRebuildPot = $('#btn-rebuild-pot');
+  if (btnRebuildPot) btnRebuildPot.addEventListener('click', generatePOT);
+
+  setupAutoResize('#defect-form textarea');
 });

@@ -1,5 +1,6 @@
 # --- Gemini AI Configuration -----------------------------------------
 import os
+import json
 from dotenv import load_dotenv
 
 # Load environment variables from .env file if present
@@ -61,6 +62,7 @@ TRANSITION_FAIL = "Fail"
 
 AUTO_SAVE_POT = False
 AUTO_SUBMIT_DEFECT = False
+SHARE_SCREENSHOTS_WITH_AI = True
 
 # --- Local file paths ---------------------------------------------------
 BROWSER_STATE_PATH = "jira_session.json"
@@ -93,6 +95,7 @@ _KEY_MAPPING = {
     "transition_fail": "TRANSITION_FAIL",
     "auto_save_pot": "AUTO_SAVE_POT",
     "auto_submit_defect": "AUTO_SUBMIT_DEFECT",
+    "share_screenshots_with_ai": "SHARE_SCREENSHOTS_WITH_AI",
 }
 
 def get(key, default=None):
@@ -120,9 +123,11 @@ def get(key, default=None):
 
 def set_override(key, value):
     _runtime_overrides[key] = value
+    persist_overrides()
 
 def set_overrides(overrides_dict):
     _runtime_overrides.update(overrides_dict)
+    persist_overrides()
 
 def get_all_settings():
     settings = {}
@@ -136,3 +141,21 @@ def get_all_settings():
 
 def clear_overrides():
     _runtime_overrides.clear()
+    persist_overrides()
+
+def load_persisted_overrides():
+    try:
+        if os.path.exists("settings_overrides.json"):
+            with open("settings_overrides.json", "r", encoding="utf-8") as f:
+                _runtime_overrides.update(json.load(f))
+    except Exception as e:
+        print(f"[!] Error loading settings overrides: {e}")
+
+def persist_overrides():
+    try:
+        with open("settings_overrides.json", "w", encoding="utf-8") as f:
+            json.dump(_runtime_overrides, f, indent=2)
+    except Exception as e:
+        print(f"[!] Error saving settings overrides: {e}")
+
+load_persisted_overrides()

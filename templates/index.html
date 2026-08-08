@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Auto TTB v2.0</title>
+  <title>Auto TTB v3.0</title>
   <meta name="description" content="QA Test Execution Automation Dashboard">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧪</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,16 +13,21 @@
 </head>
 <body>
 
-  <!-- ============ Top Bar ============ -->
+  <!-- Topbar -->
   <header id="topbar">
-    <div class="logo">
-      <h1>Auto TTB <span class="badge">v2.0</span></h1>
+    <div class="topbar-left">
+      <h1 class="logo">Auto TTB <span class="version-badge">v3.0</span></h1>
+      <nav id="breadcrumb" class="breadcrumb hidden">
+        <button class="breadcrumb-item btn-ghost" onclick="goHome()">Home</button>
+        <span class="breadcrumb-sep">/</span>
+        <span id="breadcrumb-te" class="breadcrumb-item active"></span>
+      </nav>
     </div>
-    <div class="controls">
+    <div class="topbar-right">
       <div class="session-indicator" id="session-dot" title="Session Status"></div>
-      <button id="btn-login" class="btn btn-outline">🔑 Login</button>
-      <button id="btn-save-session" class="btn btn-save-session hidden">💾 Save Jira Session</button>
-      <button id="btn-settings" class="icon-btn" aria-label="Settings">
+      <button id="btn-login" class="btn btn-sm btn-outline">🔑 Login</button>
+      <button id="btn-save-session" class="btn btn-sm btn-save-session hidden">💾 Save Session</button>
+      <button id="btn-settings" class="btn-icon" aria-label="Settings">
         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
           <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -31,15 +36,24 @@
     </div>
   </header>
 
-  <!-- ============ Settings Panel ============ -->
+  <!-- Settings Side Panel -->
   <div id="settings-overlay" class="overlay hidden"></div>
   <div id="settings-panel" class="side-panel hidden">
     <div class="panel-header">
       <h2>Settings & Fixed Jira Boilerplate</h2>
-      <button id="btn-close-settings" class="icon-btn">&times;</button>
+      <button id="btn-close-settings" class="btn-icon">&times;</button>
     </div>
     <div class="panel-content">
       <form id="settings-form">
+        <h3 class="settings-section-title">AI & Privacy</h3>
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" name="share_screenshots_with_ai" id="setting-share-screenshots">
+            <span>Share screenshots with AI</span>
+          </label>
+          <small class="help-text text-muted">When disabled, only text notes are sent to Gemini AI for defect drafting. Screenshots stay local.</small>
+        </div>
+
         <h3 class="settings-section-title">Jira Instance & Scope</h3>
         <div class="form-group">
           <label>Jira Base URL</label>
@@ -73,7 +87,7 @@
         </div>
         <div class="form-group">
           <label>Defect Type & Filed Against</label>
-          <div class="flex-row gap-2">
+          <div class="form-row">
             <input type="text" name="defect_type" placeholder="B2B Digital Revamp">
             <input type="text" name="filed_against" placeholder="BDR-ANDROID">
           </div>
@@ -102,7 +116,7 @@
         </div>
         <div class="form-group">
           <label>Transition: Executing / Pass / Fail</label>
-          <div class="flex-row gap-2">
+          <div class="form-row">
             <input type="text" name="transition_executing" placeholder="Start Progress">
             <input type="text" name="transition_pass" placeholder="Pass">
             <input type="text" name="transition_fail" placeholder="Fail">
@@ -115,7 +129,7 @@
             <input type="checkbox" name="auto_save_pot" id="setting-auto-save-pot">
             <span>Auto-save to POT on Pass / Fail</span>
           </label>
-          <small class="help-text">When OFF, passing or failing a test case will not automatically save to POT. You can still save manually using the "Save to POT" button.</small>
+          <small class="help-text text-muted">When OFF, passing or failing a test case will not automatically save to POT. You can still save manually using the "Save to POT" button.</small>
         </div>
 
         <div class="panel-actions">
@@ -124,49 +138,54 @@
       </form>
     </div>
   </div>
-
-  <!-- ============ Main Content ============ -->
+  
+  <!-- MAIN CONTENT -->
   <main>
 
-    <!-- Step 1: TE Input -->
-    <section id="te-input-section" class="glass-card">
-      <h2>Test Execution Context</h2>
-      <p>Enter your Test Execution (TE) Key to start processing test cases, or select a saved execution from database.</p>
-      <form id="te-form" class="flex-row mt-2 flex-wrap">
-        <input type="text" id="te-key-input" placeholder="e.g. QA-335480" required>
-        <button type="submit" class="btn btn-primary">Load Session</button>
-        <button type="button" id="btn-fetch-jira-te" class="btn btn-secondary">🔍 Fetch TCs from Jira</button>
-        <button type="button" id="btn-open-jira-te" class="btn btn-outline">🔗 Open in Jira</button>
+    <!-- Section 1: TE Input / Home -->
+    <section id="te-input-section" class="card">
+      <div class="section-icon">🧪</div>
+      <h2>Test Execution</h2>
+      <p class="text-muted">Paste a Jira TE link or enter a key to start.</p>
+      <form id="te-form" class="te-form">
+        <div class="input-group">
+          <input type="text" id="te-key-input" placeholder="Paste link or enter key (e.g. QA-335480)" autocomplete="off">
+          <button type="submit" class="btn btn-primary">Load</button>
+          <button type="button" id="btn-fetch-jira-te" class="btn btn-secondary">🔍 Fetch from Jira</button>
+        </div>
       </form>
-
-      <!-- Saved Executions Quick Select -->
-      <div id="saved-tes-container" class="mt-4 hidden">
-        <p class="text-sm text-gray font-weight-500 mb-1">Saved Executions (db.json):</p>
-        <div id="saved-tes-list" class="flex-row gap-2 flex-wrap mt-1"></div>
+      <div id="te-loading" class="loading-bar hidden"><div class="loading-bar-fill"></div></div>
+      <div id="saved-tes-container" class="saved-tes hidden">
+        <p class="label">Recent Executions</p>
+        <div id="saved-tes-list" class="te-chips"></div>
       </div>
     </section>
 
-    <!-- Step 2: TC Grid -->
+    <!-- Section 2: TC Grid -->
     <section id="tc-grid-section" class="hidden">
       <div class="section-header">
-        <h2 id="tc-grid-title">Test Cases</h2>
-        <div class="progress-container">
-          <span id="tc-progress-text">0/0 done</span>
+        <div class="section-header-left">
+          <button class="btn btn-ghost" onclick="goHome()" title="Back to Home">← Home</button>
+          <h2 id="tc-grid-title">Test Cases</h2>
+        </div>
+        <div class="section-header-right">
+          <span id="tc-progress-text" class="text-muted text-sm">0/0</span>
           <div class="progress-bar"><div id="tc-progress-fill" class="progress-fill"></div></div>
         </div>
       </div>
 
-      <div class="tc-actions mt-2 flex-row flex-wrap justify-between">
-        <div class="flex-row gap-2">
-          <button id="btn-show-add-tc" class="btn btn-outline">＋ Add TC</button>
-          <button id="btn-add-multiple-tc" class="btn btn-outline">📋 Bulk Add</button>
-          <button id="btn-download-poc" class="btn btn-secondary">📄 Download POT Doc (.docx)</button>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <button id="btn-show-add-tc" class="btn btn-sm btn-outline">＋ Add TC</button>
+          <button id="btn-add-multiple-tc" class="btn btn-sm btn-outline">📋 Bulk Add</button>
+          <div class="toolbar-divider"></div>
+          <button id="btn-rebuild-pot" class="btn btn-sm btn-secondary">📄 Generate POT</button>
+          <button id="btn-download-poc" class="btn btn-sm btn-outline">⬇ Download POT</button>
+          <button id="btn-delete-te" class="btn btn-sm btn-danger-outline">🗑 Delete TE</button>
         </div>
-        
-        <!-- Filter and Search controls -->
-        <div class="filter-controls flex-row gap-2">
-          <input type="text" id="tc-search-input" placeholder="🔍 Search TCs..." class="search-input">
-          <div class="filter-pills flex-row gap-1">
+        <div class="toolbar-right">
+          <input type="text" id="tc-search-input" placeholder="Search..." class="input-sm">
+          <div class="filter-pills">
             <button class="filter-pill active" data-filter="all">All</button>
             <button class="filter-pill" data-filter="pending">Pending</button>
             <button class="filter-pill" data-filter="pass">Pass</button>
@@ -176,147 +195,137 @@
         </div>
       </div>
 
-      <div id="add-tc-container" class="hidden flex-row mt-2">
-        <input type="text" id="new-tc-input" placeholder="e.g. BDR-22842  TC038_AP User - View Mobility...  (Jira# + TC name)">
-        <button id="btn-add-tc-submit" class="btn btn-primary">Add</button>
+      <!-- Add TC inputs (hidden by default) -->
+      <div id="add-tc-container" class="hidden add-tc-bar">
+        <input type="text" id="new-tc-input" placeholder="BDR-22842  TC038_AP User - View...">
+        <button id="btn-add-tc-submit" class="btn btn-primary btn-sm">Add</button>
       </div>
-      <div id="add-multiple-tc-container" class="hidden mt-2">
-        <textarea id="multiple-tc-input" rows="3" placeholder="One per line: BDR-22842  TC038_AP User - View Mobility...&#10;Or just TC keys without a Jira number"></textarea>
-        <button id="btn-add-multiple-submit" class="btn btn-primary mt-1">Add All</button>
+      <div id="add-multiple-tc-container" class="hidden add-tc-bar">
+        <textarea id="multiple-tc-input" rows="3" placeholder="One per line..."></textarea>
+        <button id="btn-add-multiple-submit" class="btn btn-primary btn-sm">Add All</button>
       </div>
 
-      <div id="tc-grid" class="grid mt-4">
-        <!-- Injected JS -->
-      </div>
+      <div id="tc-grid" class="tc-grid"></div>
     </section>
 
-    <!-- Step 3: TC Detail Panel (Two Screenshot Categories) -->
-    <section id="tc-detail-section" class="hidden glass-card">
-      <button class="btn btn-text btn-back" onclick="goBackToGrid()">← Back to list</button>
-      <div class="detail-header flex-row justify-between align-center flex-wrap gap-2">
-        <div class="flex-row gap-2 align-center">
+    <!-- Section 3: TC Detail -->
+    <section id="tc-detail-section" class="hidden card">
+      <div class="detail-nav">
+        <button class="btn btn-ghost" onclick="goBackToGrid()">← Back</button>
+        <button class="btn btn-ghost" onclick="goHome()">🏠 Home</button>
+      </div>
+      <div class="detail-header">
+        <div class="detail-header-left">
           <h2 id="detail-tc-key">TC-XXXXX</h2>
-          <span id="detail-tc-status" class="badge">Pending</span>
+          <span id="detail-tc-status" class="status-badge pending">PENDING</span>
         </div>
-        <div class="flex-row gap-2 align-center">
-          <button id="btn-open-jira-tc" class="btn btn-outline">🔗 Open in Jira</button>
-          <button id="btn-delete-tc" class="btn btn-outline text-error-btn">🗑 Delete TC</button>
+        <div class="detail-header-right">
+          <div class="inline-field">
+            <label>Jira #</label>
+            <input type="text" id="tc-number-input" placeholder="QA-335455" class="input-sm">
+          </div>
+          <button id="btn-open-jira-tc" class="btn btn-sm btn-outline">🔗 Jira</button>
+          <button id="btn-delete-tc" class="btn btn-sm btn-danger-outline">🗑 Delete</button>
         </div>
       </div>
 
-      <!-- Jira TC Number Field -->
-      <div class="flex-row gap-2 align-center mt-2 p-2" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;">
-        <label for="tc-number-input" class="text-xs text-muted font-weight-500 white-space-nowrap" style="margin-bottom:0">Jira TC Number (e.g. QA-335455):</label>
-        <input type="text" id="tc-number-input" placeholder="e.g. QA-335455" class="input-sm" style="max-width: 220px; padding: 0.35rem 0.65rem; font-size: 0.85rem;">
-        <span class="text-xs text-muted">Used for searching/opening link in Jira</span>
-      </div>
-
-      <!-- Two Screenshot Upload Areas -->
-      <div class="screenshots-dual-grid mt-2">
-        
-        <!-- Expected Screenshots Dropzone -->
+      <!-- Screenshots (dual dropzone) -->
+      <div class="screenshots-grid">
+        <!-- Expected -->
         <div class="dropzone-box" id="dropzone-box-expected" tabindex="0">
           <div class="dropzone-header">
-            <h3>Expected Result / Figma Screenshots</h3>
-            <span class="paste-indicator" id="badge-expected">Click/Focus to Target</span>
+            <h3>Expected Result</h3>
+            <span class="paste-indicator" id="badge-expected">Click to target</span>
           </div>
           <div id="dropzone-expected" class="dropzone">
             <div class="dropzone-content">
-              <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-              <p>Drop Expected / Figma images (or Paste here)</p>
+              <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+              <p>Drop or paste images</p>
             </div>
             <input type="file" id="input-expected" multiple accept="image/*" class="hidden">
           </div>
-          <div id="thumbs-expected" class="thumbnail-grid mt-2"></div>
+          <div id="thumbs-expected" class="thumbnail-grid"></div>
         </div>
-
-        <!-- Actual Screenshots Dropzone -->
+        <!-- Actual -->
         <div class="dropzone-box" id="dropzone-box-actual" tabindex="0">
           <div class="dropzone-header">
-            <h3>Actual Result / Bug Screenshots</h3>
-            <span class="paste-indicator" id="badge-actual">Click/Focus to Target</span>
+            <h3>Actual Result</h3>
+            <span class="paste-indicator" id="badge-actual">Click to target</span>
           </div>
           <div id="dropzone-actual" class="dropzone">
             <div class="dropzone-content">
-              <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-              <p>Drop Actual Bug images (or Paste here)</p>
+              <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+              <p>Drop or paste images</p>
             </div>
             <input type="file" id="input-actual" multiple accept="image/*" class="hidden">
           </div>
-          <div id="thumbs-actual" class="thumbnail-grid mt-2"></div>
+          <div id="thumbs-actual" class="thumbnail-grid"></div>
         </div>
-
       </div>
 
-      <!-- Quick Summary / Notes -->
-      <div id="summary-input-area" class="mt-4">
-        <label for="tc-summary">Quick QA Notes / Shorthand Summary</label>
+      <!-- Notes -->
+      <div class="form-group">
+        <label for="tc-summary">QA Notes</label>
         <textarea id="tc-summary" rows="3" placeholder="e.g. Enter OTP screen title not matching Figma"></textarea>
       </div>
 
-      <!-- Action Buttons -->
-      <div id="action-buttons" class="mt-4 flex-row gap-4">
-        <button id="btn-pass" class="btn btn-pass w-full">✅ Pass</button>
-        <button id="btn-fail" class="btn btn-fail w-full">❌ Fail</button>
-        <button id="btn-save-pot-tc" class="btn btn-secondary w-full">💾 Save to POT Only</button>
-        <button id="btn-skip" class="btn btn-skip">⏭ Skip</button>
+      <!-- Action buttons -->
+      <div class="action-buttons">
+        <button id="btn-pass" class="btn btn-pass">✅ Pass</button>
+        <button id="btn-fail" class="btn btn-fail">❌ Fail</button>
+        <button id="btn-skip" class="btn btn-ghost">⏭ Skip</button>
       </div>
     </section>
 
-    <!-- Step 4: Defect Preview (Matching Real Jira Defect Form) -->
-    <section id="defect-preview-section" class="hidden glass-card">
-      <button class="btn btn-text btn-back" onclick="goBackToGrid()">← Back to list</button>
-      <h2 id="defect-preview-title">Jira Defect Ticket Form Preview</h2>
+    <!-- Section 4: Defect Preview -->
+    <section id="defect-preview-section" class="hidden card">
+      <div class="detail-nav">
+        <button class="btn btn-ghost" onclick="goBackToGrid()">← Back</button>
+        <button class="btn btn-ghost" onclick="goHome()">🏠 Home</button>
+      </div>
+      <h2 id="defect-preview-title">Defect Preview</h2>
 
-      <div id="defect-form" class="mt-4 grid-2col">
-        
-        <!-- Main Form Left Col -->
-        <div class="form-col-main">
-          
+      <div id="defect-form" class="defect-grid">
+        <!-- Left column: content fields -->
+        <div class="defect-main">
           <div class="form-group">
             <label>Summary (Title) *</label>
             <input type="text" id="defect-title">
           </div>
-
           <div class="form-group">
             <label>Scenario</label>
             <textarea id="defect-scenario" rows="3"></textarea>
           </div>
-
           <div class="form-group">
             <label>Steps to Recreate</label>
             <textarea id="defect-steps" rows="4"></textarea>
           </div>
-
-          <div class="flex-row gap-4">
-            <div class="form-group w-full">
+          <div class="form-row">
+            <div class="form-group">
               <label>Expected Result</label>
-              <textarea id="defect-expected" rows="4"></textarea>
+              <textarea id="defect-expected" rows="3"></textarea>
             </div>
-            <div class="form-group w-full">
+            <div class="form-group">
               <label>Actual Result</label>
-              <textarea id="defect-actual" rows="4"></textarea>
+              <textarea id="defect-actual" rows="3"></textarea>
             </div>
           </div>
-
-          <div class="flex-row gap-4">
-            <div class="form-group w-full">
+          <div class="form-row">
+            <div class="form-group">
               <label>Test Data</label>
               <textarea id="defect-test-data" rows="2" placeholder="e.g. MSISDN: 9665XXXXXXX"></textarea>
             </div>
-            <div class="form-group w-full">
+            <div class="form-group">
               <label>QA Analysis</label>
-              <textarea id="defect-qa-analysis" rows="2" placeholder="e.g. Font family missing in assets"></textarea>
+              <textarea id="defect-qa-analysis" rows="2" placeholder="Root cause notes"></textarea>
             </div>
           </div>
-
         </div>
 
-        <!-- Meta Sidebar Right Col -->
-        <div class="form-col-side">
-          
+        <!-- Right column: metadata -->
+        <div class="defect-sidebar">
           <div class="form-group">
-            <label>Defect Severity *</label>
+            <label>Severity *</label>
             <select id="defect-severity">
               <option value="1-Low">1-Low</option>
               <option value="2-Medium">2-Medium</option>
@@ -324,57 +333,48 @@
               <option value="4-Critical">4-Critical</option>
             </select>
           </div>
-
           <div class="form-group">
             <label>Test Cases Blocked</label>
             <input type="number" id="defect-blocked-tcs" value="1" min="0">
           </div>
-
           <div class="form-group">
             <label>Assignee</label>
             <input type="text" id="defect-assignee" placeholder="e.g. Saurabh Shukla">
           </div>
-
-          <!-- Fixed Fields Collapsible Summary -->
-          <div class="fixed-fields-box mt-2">
-            <h4>Fixed Jira Defaults (Auto-Filled)</h4>
-            <ul class="fixed-fields-list text-sm">
-              <li><b>Project:</b> B2B Digital Revamp (BDR)</li>
-              <li><b>Issue Type:</b> Defect</li>
-              <li><b>For Project:</b> JK26-3835 Technical project...</li>
-              <li><b>Demo:</b> Demo 1</li>
-              <li><b>Component/s:</b> Android</li>
-              <li><b>Impacted System:</b> Mobile App</li>
-              <li><b>Defect Type:</b> B2B Digital Revamp</li>
-              <li><b>Filed Against:</b> BDR-ANDROID</li>
-              <li><b>Environment:</b> Integration</li>
-              <li><b>Defect Phase:</b> QA</li>
-              <li><b>Labels:</b> Lightmode</li>
-              <li><b>Usability / Re-occurrence:</b> No / No</li>
+          <div class="fixed-fields-box">
+            <h4>Auto-Filled Jira Fields</h4>
+            <ul class="fixed-fields-list">
+              <!-- dynamically populated by JS -->
             </ul>
           </div>
-
         </div>
-
       </div>
 
-      <div id="defect-actions" class="mt-4 flex-row gap-4">
-        <button id="btn-draft-defect" class="btn btn-primary flex-1">🤖 Draft Defect (AI)</button>
-        <button id="btn-regenerate-defect" class="btn btn-outline flex-1">🔄 Regenerate (AI)</button>
-        <button id="btn-copy-defect" class="btn btn-outline flex-1">📋 Copy Title &amp; Body</button>
-        <button id="btn-save-pot-defect" class="btn btn-secondary flex-1">💾 Save to POT Doc</button>
-        <button id="btn-submit-defect" class="btn btn-primary flex-2">🚀 Submit to Jira</button>
+      <div class="defect-actions">
+        <button id="btn-draft-defect" class="btn btn-primary">🤖 Draft with AI</button>
+        <button id="btn-regenerate-defect" class="btn btn-outline">🔄 Regenerate</button>
+        <button id="btn-copy-defect" class="btn btn-outline">📋 Copy</button>
+        <button id="btn-submit-defect" class="btn btn-primary btn-lg">🚀 Submit to Jira</button>
       </div>
 
       <div id="ai-loading" class="overlay hidden">
-        <div class="spinner-container">
+        <div class="spinner-box">
           <div class="spinner"></div>
-          <p>AI is analyzing Expected/Actual screenshots & notes...</p>
+          <p>AI analyzing screenshots & notes...</p>
         </div>
       </div>
     </section>
 
   </main>
+
+  <!-- Lightbox -->
+  <div id="lightbox-overlay" class="lightbox-overlay hidden" onclick="closeLightbox()">
+    <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+    <button class="lightbox-nav lightbox-prev" onclick="event.stopPropagation(); lightboxNav(-1)">&#8249;</button>
+    <img id="lightbox-img" src="" alt="Screenshot" onclick="event.stopPropagation()">
+    <button class="lightbox-nav lightbox-next" onclick="event.stopPropagation(); lightboxNav(1)">&#8250;</button>
+    <p id="lightbox-caption" class="lightbox-caption"></p>
+  </div>
 
   <div id="toast-container"></div>
   <script src="/static/app.js"></script>

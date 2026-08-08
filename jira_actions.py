@@ -794,6 +794,10 @@ def fetch_te_from_jira(te_key: str) -> dict:
     Navigates to https://jira.prod.mobily.lan/browse/<te_key> using the saved Jira session.
     Scrapes the TE summary/title and any linked Test Case (TC) keys.
     """
+    # Handle full URLs: extract key from URL if needed
+    if '/browse/' in te_key:
+        te_key = te_key.split('/browse/')[-1].split('?')[0].split('#')[0].strip()
+
     import re
     url = f"{config.JIRA_BASE_URL}/browse/{te_key}"
     print(f"[*] Navigating to Jira TE URL: {url}")

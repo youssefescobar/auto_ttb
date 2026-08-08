@@ -6,6 +6,8 @@ Supports direct manual reading/writing, automatic saving, and sync.
 import os
 import json
 import threading
+import shutil
+import time
 from datetime import datetime
 
 import config
@@ -23,20 +25,28 @@ def _default_db_structure():
         "test_executions": {}
     }
 
+def _read_db_unlocked() -> dict:
+    if not os.path.exists(DB_FILE):
+        data = _default_db_structure()
+        _write_db_unlocked(data)
+        return data
+
+    try:
+        with open(DB_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"[!] Error reading db.json: {e}")
+        if os.path.exists(DB_FILE):
+            backup_file = f"{DB_FILE}.corrupt.{int(time.time())}"
+            shutil.copy2(DB_FILE, backup_file)
+        data = _default_db_structure()
+        _write_db_unlocked(data)
+        return data
+
 def read_db() -> dict:
     """Reads and returns the complete db.json content."""
     with _db_lock:
-        if not os.path.exists(DB_FILE):
-            data = _default_db_structure()
-            _write_db_unlocked(data)
-            return data
-
-        try:
-            with open(DB_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"[!] Error reading db.json: {e}")
-            return _default_db_structure()
+        return _read_db_unlocked()
 
 def write_db(data: dict):
     """Writes data dictionary directly to db.json."""
@@ -62,22 +72,24 @@ def get_te(te_key: str) -> dict:
 
 def save_te(te_key: str, test_cases: list):
     """Saves or updates a Test Execution and its Test Cases in db.json."""
-    db = read_db()
-    if "test_executions" not in db:
-        db["test_executions"] = {}
-    
-    tes = db["test_executions"]
-    existing = tes.get(te_key, {})
-    
-    tes[te_key] = {
-        "te_key": te_key,
-        "created_at": existing.get("created_at", datetime.now().isoformat()),
-        "updated_at": datetime.now().isoformat(),
-        "tc_count": len(test_cases),
-        "test_cases": test_cases
-    }
-    
-    write_db(db)
+    with _db_lock:
+        db = _read_db_unlocked()
+        if "test_executions" not in db:
+            db["test_executions"] = {}
+        
+        tes = db["test_executions"]
+        existing = tes.get(te_key, {})
+        
+        tes[te_key] = {
+            "te_key": te_key,
+            "created_at": existing.get("created_at", datetime.now().isoformat()),
+            "updated_at": datetime.now().isoformat(),
+            "tc_count": len(test_cases),
+            "test_cases": test_cases
+        }
+        
+        _write_db_unlocked(db)
+        saved_te = tes[te_key]
 
     # Also sync to individual execution state.json for backward compatibility
     try:
@@ -89,7 +101,7 @@ def save_te(te_key: str, test_cases: list):
     except Exception as e:
         print(f"[!] Warning syncing state file: {e}")
 
-    return tes[te_key]
+    return saved_te
 
 def get_all_tes() -> list:
     """Returns a summary list of all TEs stored in db.json."""
@@ -112,44 +124,46 @@ def get_all_tes() -> list:
 
 def delete_te(te_key: str):
     """Deletes a TE entry from db.json."""
-    db = read_db()
-    if "test_executions" in db and te_key in db["test_executions"]:
-        del db["test_executions"][te_key]
-        write_db(db)
-        return True
+    with _db_lock:
+        db = _read_db_unlocked()
+        if "test_executions" in db and te_key in db["test_executions"]:
+            del db["test_executions"][te_key]
+            _write_db_unlocked(db)
+            return True
     return False
 
 def sync_from_executions_dir():
     """Scans executions/ folder and populates db.json if needed."""
-    db = read_db()
-    tes = db.get("test_executions", {})
-    changed = False
+    with _db_lock:
+        db = _read_db_unlocked()
+        tes = db.get("test_executions", {})
+        changed = False
 
-    exec_dir = os.path.abspath(config.EXECUTIONS_DIR)
-    if os.path.exists(exec_dir):
-        for item in os.listdir(exec_dir):
-            item_path = os.path.join(exec_dir, item)
-            if os.path.isdir(item_path):
-                state_file = os.path.join(item_path, "state.json")
-                if os.path.exists(state_file) and item not in tes:
-                    try:
-                        with open(state_file, "r", encoding="utf-8") as f:
-                            st_data = json.load(f)
-                            tcs = st_data.get("test_cases", [])
-                            if "test_executions" not in db:
-                                db["test_executions"] = {}
-                            db["test_executions"][item] = {
-                                "te_key": item,
-                                "created_at": datetime.now().isoformat(),
-                                "updated_at": datetime.now().isoformat(),
-                                "tc_count": len(tcs),
-                                "test_cases": tcs
-                            }
-                            changed = True
-                    except Exception as e:
-                        print(f"[!] Error syncing execution {item}: {e}")
-    if changed:
-        write_db(db)
+        exec_dir = os.path.abspath(config.EXECUTIONS_DIR)
+        if os.path.exists(exec_dir):
+            for item in os.listdir(exec_dir):
+                item_path = os.path.join(exec_dir, item)
+                if os.path.isdir(item_path):
+                    state_file = os.path.join(item_path, "state.json")
+                    if os.path.exists(state_file) and item not in tes:
+                        try:
+                            with open(state_file, "r", encoding="utf-8") as f:
+                                st_data = json.load(f)
+                                tcs = st_data.get("test_cases", [])
+                                if "test_executions" not in db:
+                                    db["test_executions"] = {}
+                                db["test_executions"][item] = {
+                                    "te_key": item,
+                                    "created_at": datetime.now().isoformat(),
+                                    "updated_at": datetime.now().isoformat(),
+                                    "tc_count": len(tcs),
+                                    "test_cases": tcs
+                                }
+                                changed = True
+                        except Exception as e:
+                            print(f"[!] Error syncing execution {item}: {e}")
+        if changed:
+            _write_db_unlocked(db)
 
 # Auto sync on import
 sync_from_executions_dir()

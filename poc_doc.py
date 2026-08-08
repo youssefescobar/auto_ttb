@@ -96,6 +96,193 @@ def _get_or_create_doc(doc_path: str, te_key: str):
 
     return doc
 
+def rebuild_pot(te_key: str, test_cases: list) -> str:
+    """Rebuilds the POT document from scratch using all test cases."""
+    doc_path = get_te_doc_path(te_key)
+    
+    # Always create a fresh document
+    doc = Document()
+    
+    # Compact Page Margins: 0.45 inch all around
+    for section in doc.sections:
+        section.top_margin = Inches(0.45)
+        section.bottom_margin = Inches(0.45)
+        section.left_margin = Inches(0.45)
+        section.right_margin = Inches(0.45)
+
+    # Document Header Table (Clean Compact Banner)
+    header_tbl = doc.add_table(rows=1, cols=1)
+    header_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    cell = header_tbl.cell(0, 0)
+    set_cell_background(cell, "1E293B")  # Dark Slate background
+    set_cell_margins(cell, top=80, bottom=80, left=160, right=160)
+
+    p1 = cell.paragraphs[0]
+    p1.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p1.paragraph_format.space_before = Pt(0)
+    p1.paragraph_format.space_after = Pt(0)
+    r1 = p1.add_run("PROOF OF TESTING (POT) REPORT")
+    r1.font.name = 'Calibri'
+    r1.font.size = Pt(12)
+    r1.font.bold = True
+    r1.font.color.rgb = RGBColor(255, 255, 255)
+
+    p2 = cell.add_paragraph()
+    p2.paragraph_format.space_before = Pt(0)
+    p2.paragraph_format.space_after = Pt(0)
+    r2 = p2.add_run(f"Test Execution Key: {te_key}  |  Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    r2.font.name = 'Calibri'
+    r2.font.size = Pt(8.5)
+    r2.font.color.rgb = RGBColor(148, 163, 184)
+
+    # Spacing after document title
+    p_spacer = doc.add_paragraph()
+    p_spacer.paragraph_format.space_before = Pt(0)
+    p_spacer.paragraph_format.space_after = Pt(2)
+
+    for tc in test_cases:
+        tc_name = tc.get('key') or tc.get('name') or tc.get('tc_number') or "Unknown TC"
+        status_str = (tc.get('status') or "PENDING").upper()
+        summary = tc.get('summary', "")
+        defect_key = tc.get('defect_key', "")
+        expected_shots = tc.get('expected_shots', [])
+        actual_shots = tc.get('actual_shots', [])
+
+        # Status colors
+        if status_str == 'PASS':
+            status_bg = "DCFCE7"
+            status_fg = RGBColor(22, 101, 52)
+        elif status_str == 'FAIL':
+            status_bg = "FEE2E2"
+            status_fg = RGBColor(153, 27, 27)
+        elif status_str == 'PENDING':
+            status_bg = "FEF3C7"
+            status_fg = RGBColor(217, 119, 6) # amber
+        else: # SKIP or other
+            status_bg = "F1F5F9"
+            status_fg = RGBColor(100, 116, 139) # gray
+
+        # TC Banner Table (1 row, 2 cells)
+        tbl = doc.add_table(rows=1, cols=2)
+        tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+        set_table_borders(tbl, color="CBD5E1", sz="4", val="single")
+
+        cell_left = tbl.cell(0, 0)
+        cell_right = tbl.cell(0, 1)
+
+        cell_left.width = Inches(5.8)
+        cell_right.width = Inches(1.7)
+
+        set_cell_background(cell_left, "F8FAFC")
+        set_cell_background(cell_right, status_bg)
+        set_cell_margins(cell_left, top=40, bottom=40, left=100, right=100)
+        set_cell_margins(cell_right, top=40, bottom=40, left=100, right=100)
+
+        # TC Title & Info
+        p_tc = cell_left.paragraphs[0]
+        p_tc.paragraph_format.space_before = Pt(0)
+        p_tc.paragraph_format.space_after = Pt(0)
+        r_tc = p_tc.add_run(f"Test Case: {tc_name}")
+        r_tc.font.name = 'Calibri'
+        r_tc.font.size = Pt(10)
+        r_tc.font.bold = True
+        r_tc.font.color.rgb = RGBColor(15, 23, 42)
+
+        if summary:
+            p_sum = cell_left.add_paragraph()
+            p_sum.paragraph_format.space_before = Pt(0)
+            p_sum.paragraph_format.space_after = Pt(0)
+            r_sum_lbl = p_sum.add_run("Summary: ")
+            r_sum_lbl.font.bold = True
+            r_sum_lbl.font.size = Pt(8.5)
+            r_sum_lbl.font.color.rgb = RGBColor(71, 85, 105)
+            r_sum_txt = p_sum.add_run(summary)
+            r_sum_txt.font.size = Pt(8.5)
+            r_sum_txt.font.color.rgb = RGBColor(51, 65, 85)
+
+        if defect_key:
+            p_def = cell_left.add_paragraph()
+            p_def.paragraph_format.space_before = Pt(0)
+            p_def.paragraph_format.space_after = Pt(0)
+            r_def_lbl = p_def.add_run("Linked Defect: ")
+            r_def_lbl.font.bold = True
+            r_def_lbl.font.size = Pt(8.5)
+            r_def_lbl.font.color.rgb = RGBColor(185, 28, 28)
+            r_def_txt = p_def.add_run(defect_key)
+            r_def_txt.font.bold = True
+            r_def_txt.font.size = Pt(8.5)
+            r_def_txt.font.color.rgb = RGBColor(185, 28, 28)
+
+        if status_str == 'PENDING':
+            p_pen = cell_left.add_paragraph()
+            p_pen.paragraph_format.space_before = Pt(0)
+            p_pen.paragraph_format.space_after = Pt(0)
+            r_pen = p_pen.add_run("Awaiting execution")
+            r_pen.font.size = Pt(8.5)
+            r_pen.font.italic = True
+            r_pen.font.color.rgb = RGBColor(100, 116, 139)
+
+        # Status Pill
+        p_st = cell_right.paragraphs[0]
+        p_st.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_st.paragraph_format.space_before = Pt(0)
+        p_st.paragraph_format.space_after = Pt(0)
+        r_st = p_st.add_run(f"[ {status_str} ]")
+        r_st.font.name = 'Calibri'
+        r_st.font.size = Pt(9.5)
+        r_st.font.bold = True
+        r_st.font.color.rgb = status_fg
+
+        # Add Expected Result Screenshots
+        if expected_shots:
+            p_lbl_e = doc.add_paragraph()
+            p_lbl_e.paragraph_format.space_before = Pt(4)
+            p_lbl_e.paragraph_format.space_after = Pt(2)
+            r_lbl_e = p_lbl_e.add_run("Expected Result Screenshots")
+            r_lbl_e.font.bold = True
+            r_lbl_e.font.size = Pt(9)
+            r_lbl_e.font.color.rgb = RGBColor(30, 41, 59)
+            
+            p_img_e = doc.add_paragraph()
+            p_img_e.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for img_path in expected_shots:
+                if os.path.exists(img_path):
+                    try:
+                        run = p_img_e.add_run()
+                        run.add_picture(img_path, width=Inches(3.2))
+                        p_img_e.add_run("  ")
+                    except Exception:
+                        pass
+        
+        # Add Actual Result Screenshots
+        if actual_shots:
+            p_lbl_a = doc.add_paragraph()
+            p_lbl_a.paragraph_format.space_before = Pt(4)
+            p_lbl_a.paragraph_format.space_after = Pt(2)
+            r_lbl_a = p_lbl_a.add_run("Actual Result Screenshots")
+            r_lbl_a.font.bold = True
+            r_lbl_a.font.size = Pt(9)
+            r_lbl_a.font.color.rgb = RGBColor(30, 41, 59)
+            
+            p_img_a = doc.add_paragraph()
+            p_img_a.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for img_path in actual_shots:
+                if os.path.exists(img_path):
+                    try:
+                        run = p_img_a.add_run()
+                        run.add_picture(img_path, width=Inches(3.2))
+                        p_img_a.add_run("  ")
+                    except Exception:
+                        pass
+
+        # Divider spacing after TC entry
+        p_div = doc.add_paragraph()
+        p_div.paragraph_format.space_before = Pt(4)
+        p_div.paragraph_format.space_after = Pt(4)
+
+    doc.save(doc_path)
+    return doc_path
+
 def append_tc_pot(
     tc_number: str, 
     status: str, 

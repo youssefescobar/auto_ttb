@@ -3,6 +3,7 @@ import json
 import time
 import threading
 from flask import Flask, request, jsonify, send_file, send_from_directory, render_template
+from pathlib import Path
 
 import config
 import jira_actions
@@ -15,7 +16,9 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB upload limit
 
 @app.after_request
 def add_cors_headers(response):
-    response.headers['Access-Control-Allow-Origin'] = '*'
+    origin = request.headers.get('Origin', '')
+    if origin.startswith('http://localhost') or origin.startswith('http://127.0.0.1'):
+        response.headers['Access-Control-Allow-Origin'] = origin
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, PUT, DELETE'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     return response
@@ -63,6 +66,8 @@ def api_upload_screenshots():
         return jsonify({"error": "Missing te_key or tc_key"}), 400
 
     save_dir = os.path.join(os.path.abspath(config.EXECUTIONS_DIR), te_key, tc_key, category)
+    if not os.path.realpath(save_dir).startswith(os.path.realpath(config.EXECUTIONS_DIR)):
+        return jsonify({"error": "Invalid path"}), 400
     os.makedirs(save_dir, exist_ok=True)
 
     saved_files = []
@@ -85,6 +90,8 @@ def api_upload_screenshots():
 @app.route('/api/screenshots/<te_key>/<tc_key>', methods=['GET'])
 def api_get_screenshots(te_key, tc_key):
     tc_dir = os.path.join(os.path.abspath(config.EXECUTIONS_DIR), te_key, tc_key)
+    if not os.path.realpath(tc_dir).startswith(os.path.realpath(config.EXECUTIONS_DIR)):
+        return jsonify({"error": "Invalid path"}), 400
     result = {"expected": [], "actual": []}
 
     for cat in ["expected", "actual"]:
@@ -104,6 +111,9 @@ def api_get_screenshots(te_key, tc_key):
 @app.route('/api/screenshot-file/<te_key>/<tc_key>/<category>/<filename>', methods=['GET'])
 def api_screenshot_file(te_key, tc_key, category, filename):
     save_dir = os.path.join(os.path.abspath(config.EXECUTIONS_DIR), te_key, tc_key, category)
+    filepath = os.path.join(save_dir, filename)
+    if not os.path.realpath(filepath).startswith(os.path.realpath(save_dir)):
+        return jsonify({"error": "Invalid path"}), 400
     return send_from_directory(save_dir, filename)
 
 @app.route('/api/delete-screenshot', methods=['POST'])
@@ -139,6 +149,11 @@ def api_generate_defect():
         te_key = data.get('te_key', '')
         expected_shots = data.get('expected_shots', [])
         actual_shots = data.get('actual_shots', [])
+
+        # Check AI screenshot sharing setting
+        if not config.get('share_screenshots_with_ai', True):
+            expected_shots = []
+            actual_shots = []
 
         # AI Title
         title_res = defect_draft.generate_defect_title(
@@ -283,6 +298,35 @@ def api_fail_tc():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/rebuild-pot', methods=['POST'])
+def api_rebuild_pot():
+    try:
+        data = request.json or {}
+        te_key = data.get('te_key')
+        if not te_key:
+            return jsonify({"error": "Missing te_key"}), 400
+
+        te_data = db.get_te(te_key)
+        test_cases = te_data.get('test_cases', [])
+
+        # Gather screenshot paths for each TC
+        for tc in test_cases:
+            tc_key = tc.get('key', '') or tc.get('name', '')
+            tc_dir = os.path.join(os.path.abspath(config.EXECUTIONS_DIR), te_key, tc_key)
+            tc['expected_shots'] = []
+            tc['actual_shots'] = []
+            for cat in ['expected', 'actual']:
+                cat_dir = os.path.join(tc_dir, cat)
+                if os.path.exists(cat_dir):
+                    for f in sorted(os.listdir(cat_dir)):
+                        if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+                            tc[f'{cat}_shots'].append(os.path.abspath(os.path.join(cat_dir, f)))
+
+        doc_path = poc_doc.rebuild_pot(te_key, test_cases)
+        return jsonify({"status": "success", "doc_path": doc_path, "tc_count": len(test_cases)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/download-poc/<te_key>', methods=['GET'])
 def api_download_poc(te_key):
     try:
@@ -316,7 +360,19 @@ def api_te_list():
 @app.route('/api/te/<te_key>', methods=['DELETE'])
 def api_delete_te(te_key):
     try:
+        exec_dir = os.path.abspath(config.EXECUTIONS_DIR)
+        target_dir = os.path.abspath(os.path.join(exec_dir, te_key))
+        if not target_dir.startswith(exec_dir):
+            return jsonify({"error": "Invalid te_key path"}), 400
+
         success = db.delete_te(te_key)
+        
+        # Clean up physical directory from disk (screenshots, word report, state)
+        if os.path.exists(target_dir):
+            import shutil
+            shutil.rmtree(target_dir, ignore_errors=True)
+            success = True
+
         return jsonify({"status": "deleted" if success else "not_found"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -325,7 +381,12 @@ def api_delete_te(te_key):
 def api_fetch_jira_te():
     try:
         data = request.json or {}
-        te_key = data.get('te_key', '').strip()
+        raw_input = data.get('te_key', '').strip()
+        # Extract key from URL if a full Jira URL was pasted
+        if '/browse/' in raw_input:
+            te_key = raw_input.split('/browse/')[-1].split('?')[0].split('#')[0].strip()
+        else:
+            te_key = raw_input
         if not te_key:
             return jsonify({"error": "Missing te_key"}), 400
 

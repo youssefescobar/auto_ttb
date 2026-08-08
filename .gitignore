@@ -2,4 +2,6 @@
 .env
 /venv
 /executions
-
+db.json
+jira_session.json
+settings_overrides.json

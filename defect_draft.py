@@ -45,7 +45,9 @@ def generate_defect_title(notes: str, tc_key: str = "", te_key: str = "", expect
     for path in all_paths:
         if path and os.path.exists(path):
             try:
-                contents.append(Image.open(path))
+                img = Image.open(path)
+                img.load()
+                contents.append(img)
             except Exception:
                 pass
 
@@ -92,14 +94,20 @@ def draft_defect_sections(notes: str, expected_shots: list[str] = None, actual_s
         contents.append("Below are EXPECTED RESULT / FIGMA DESIGN images:")
         for path in expected_shots:
             if path and os.path.exists(path):
-                try: contents.append(Image.open(path))
+                try: 
+                    img = Image.open(path)
+                    img.load()
+                    contents.append(img)
                 except Exception: pass
 
     if actual_shots:
         contents.append("Below are ACTUAL BUG RESULT images:")
         for path in actual_shots:
             if path and os.path.exists(path):
-                try: contents.append(Image.open(path))
+                try: 
+                    img = Image.open(path)
+                    img.load()
+                    contents.append(img)
                 except Exception: pass
 
     contents.append(f"QA Notes: {notes}")
