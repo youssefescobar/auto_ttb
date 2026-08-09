@@ -378,6 +378,9 @@ input:focus, textarea:focus, select:focus {
   font-weight: 600;
   font-size: 0.95rem;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 0.5rem;
 }
 
 .status-badge {
@@ -426,10 +429,7 @@ input:focus, textarea:focus, select:focus {
   height: 8px;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 9999px;
->>>>>>> d68ee18 (lol3)
   overflow: hidden;
-  text-overflow: ellipsis;
-  padding-right: 0.5rem;
 }
 .tc-card-actions { display: flex; align-items: center; gap: 0.5rem; }
 .tc-card-delete-btn {
