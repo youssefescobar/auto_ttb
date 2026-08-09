@@ -290,7 +290,8 @@ def append_tc_pot(
     summary: str = "", 
     expected_shots: list[str] = None, 
     actual_shots: list[str] = None,
-    defect_key: str = None
+    defect_key: str = None,
+    blocked_tcs: str = None
 ):
     """
     Appends a compact TC result to the POT doc, enabling 3 TCs per page.
@@ -313,6 +314,9 @@ def append_tc_pot(
     elif status_str == 'FAIL':
         status_bg = "FEE2E2"
         status_fg = RGBColor(153, 27, 27)
+    elif status_str == 'BLOCKED':
+        status_bg = "F3E8FF"
+        status_fg = RGBColor(168, 85, 247)
     else:
         status_bg = "FEF3C7"
         status_fg = RGBColor(146, 64, 14)
@@ -367,6 +371,18 @@ def append_tc_pot(
         r_def_txt.font.bold = True
         r_def_txt.font.size = Pt(8.5)
         r_def_txt.font.color.rgb = RGBColor(185, 28, 28)
+
+    if blocked_tcs:
+        p_blk = cell_left.add_paragraph()
+        p_blk.paragraph_format.space_before = Pt(0)
+        p_blk.paragraph_format.space_after = Pt(0)
+        r_blk_lbl = p_blk.add_run("Blocks TCs: ")
+        r_blk_lbl.font.bold = True
+        r_blk_lbl.font.size = Pt(8.5)
+        r_blk_lbl.font.color.rgb = RGBColor(168, 85, 247)
+        r_blk_txt = p_blk.add_run(blocked_tcs)
+        r_blk_txt.font.size = Pt(8.5)
+        r_blk_txt.font.color.rgb = RGBColor(168, 85, 247)
 
     # Status Pill
     p_st = cell_right.paragraphs[0]

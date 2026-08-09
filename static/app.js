@@ -310,6 +310,7 @@ function renderTCGrid() {
           ${tcNum ? `🔗 ${tcNum}` : '🔗 Add Jira #'}
         </button>
         ${tc.defect_key ? `<span class="badge text-xs" style="background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4)">🐛 Defect: ${tc.defect_key}</span>` : ''}
+        ${tc.blocked_by ? `<span class="badge text-xs" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4)">🚫 Blocked By: ${tc.blocked_by}</span>` : ''}
       </div>
     `;
 
@@ -570,6 +571,8 @@ function goBackToGrid() {
       severity: $('#defect-severity').value,
       blocked_tcs: $('#defect-blocked-tcs').value,
       assignee: $('#defect-assignee').value,
+      test_data: $('#defect-test-data').value,
+      qa_analysis: $('#defect-qa-analysis').value,
     };
   }
   hide($('#tc-detail-section'));
@@ -821,6 +824,10 @@ async function failTC() {
     // Restore persisted draft without calling AI
     populateDefectForm(existingDraft);
     showToast('📋 Restored previous draft', 'info');
+  } else if (tc.submitted_defect) {
+    // Restore the previously submitted defect for review
+    populateDefectForm(tc.submitted_defect);
+    showToast('📋 Loaded submitted defect data', 'info');
   } else {
     // Open blank — user must click "Draft Defect" to trigger AI
     clearDefectForm();
@@ -835,6 +842,8 @@ function populateDefectForm(defect) {
   $('#defect-steps').value = defect.steps || '';
   $('#defect-expected').value = defect.expected || '';
   $('#defect-actual').value = defect.actual || '';
+  $('#defect-test-data').value = defect.test_data || '';
+  $('#defect-qa-analysis').value = defect.qa_analysis || '';
   if (defect.severity) $('#defect-severity').value = defect.severity;
   if (defect.blocked_tcs !== undefined) $('#defect-blocked-tcs').value = defect.blocked_tcs;
   if (defect.assignee) $('#defect-assignee').value = defect.assignee;
@@ -850,7 +859,7 @@ function clearDefectForm() {
   $('#defect-test-data').value = '';
   $('#defect-qa-analysis').value = '';
   $('#defect-severity').value = '1-Low';
-  $('#defect-blocked-tcs').value = '1';
+  $('#defect-blocked-tcs').value = '';
   $('#defect-assignee').value = 'Saurabh Shukla';
 }
 
@@ -926,6 +935,32 @@ async function submitDefect() {
       tc.status = 'fail';
       tc.summary = $('#tc-summary')?.value?.trim() || tc.summary;
       tc.defect_key = res.issue_key;
+      
+      tc.submitted_defect = {
+        title: $('#defect-title').value,
+        scenario: $('#defect-scenario').value,
+        steps: $('#defect-steps').value,
+        expected: $('#defect-expected').value,
+        actual: $('#defect-actual').value,
+        test_data: $('#defect-test-data').value,
+        qa_analysis: $('#defect-qa-analysis').value,
+        severity: $('#defect-severity').value,
+        blocked_tcs: $('#defect-blocked-tcs').value,
+        assignee: $('#defect-assignee').value
+      };
+    }
+    
+    const blockedInput = $('#defect-blocked-tcs').value;
+    if (blockedInput) {
+      const blockedKeys = blockedInput.split(',').map(k => k.trim()).filter(Boolean);
+      blockedKeys.forEach(bk => {
+        const btc = state.testCases.find(t => t.key === bk || t.tc_number === bk);
+        if (btc) {
+          btc.status = 'blocked';
+          btc.summary = `Blocked by defect ${res.issue_key} on TC ${tc ? tc.key : ''}`;
+          btc.blocked_by = res.issue_key + (tc ? ` (${tc.key})` : '');
+        }
+      });
     }
 
     saveExecutionState();

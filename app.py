@@ -211,6 +211,7 @@ def api_save_pot():
         defect_key = data.get('defect_key', None)
         expected_shots = data.get('expected_shots', [])
         actual_shots = data.get('actual_shots', [])
+        blocked_tcs = data.get('blocked_tcs', '')
 
         doc_path = poc_doc.append_tc_pot(
             tc_number=tc_name,
@@ -219,7 +220,8 @@ def api_save_pot():
             summary=summary,
             expected_shots=expected_shots,
             actual_shots=actual_shots,
-            defect_key=defect_key
+            defect_key=defect_key,
+            blocked_tcs=blocked_tcs
         )
         return jsonify({"status": "success", "doc_path": doc_path})
     except Exception as e:

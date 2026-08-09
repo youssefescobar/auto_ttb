@@ -191,6 +191,7 @@
             <button class="filter-pill" data-filter="pass">Pass</button>
             <button class="filter-pill" data-filter="fail">Fail</button>
             <button class="filter-pill" data-filter="skip">Skip</button>
+            <button class="filter-pill" data-filter="blocked">Blocked</button>
           </div>
         </div>
       </div>
@@ -334,8 +335,8 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Test Cases Blocked</label>
-            <input type="number" id="defect-blocked-tcs" value="1" min="0">
+            <label>Test Cases Blocked (Comma separated keys)</label>
+            <input type="text" id="defect-blocked-tcs" placeholder="e.g. TC-123, TC-124">
           </div>
           <div class="form-group">
             <label>Assignee</label>

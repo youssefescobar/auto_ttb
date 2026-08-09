@@ -2,7 +2,7 @@
   "meta": {
     "version": "2.0",
     "description": "Auto TTB Test Executions & Test Cases Database",
-    "last_updated": "2026-08-07T16:59:01.692838"
+    "last_updated": "2026-08-09T12:30:31.012251"
   },
   "test_executions": {
     "QA-335546": {
@@ -118,8 +118,8 @@
     "BDR-22893": {
       "te_key": "BDR-22893",
       "created_at": "2026-08-06T11:08:17.004273",
-      "updated_at": "2026-08-07T16:59:01.692832",
-      "tc_count": 74,
+      "updated_at": "2026-08-09T12:30:31.012247",
+      "tc_count": 81,
       "test_cases": [
         {
           "key": "TC01_AP user login with username and password and OTP.Check All the pages in light mode and Font Family",
@@ -132,8 +132,8 @@
           "key": "TC02_AP_check Inline error message font and light mode display in AP user login page.",
           "name": "TC02_AP_check Inline error message font and light mode display in AP user login page.",
           "status": "pass",
-          "summary": "no inline message only api",
-          "tc_number": ""
+          "summary": "inline error color, icon looks fine",
+          "tc_number": "BDR-22805"
         },
         {
           "key": "TC03_AP_check API error message font and light mode display in AP user login page.",
@@ -164,12 +164,12 @@
           "tc_number": ""
         },
         {
+          "defect_key": "BDR-23386",
           "key": "TC07_AP user Reset password. Check All the pages in light mode and Font Family",
           "name": "TC07_AP user Reset password. Check All the pages in light mode and Font Family",
           "status": "fail",
           "summary": "nothing happens when i click send otp, to reset/ forget AP user password",
-          "tc_number": "BDR-22811",
-          "defect_key": "BDR-23386"
+          "tc_number": "BDR-22811"
         },
         {
           "key": "TC08_AP_check Inline error message font and light mode display in Reset password page.",
@@ -312,12 +312,12 @@
           "tc_number": ""
         },
         {
+          "defect_key": "BDR-24734",
           "key": "TC031_AP user change account Manager.Check All the page in light mode and Font Family",
           "name": "TC031_AP user change account Manager.Check All the page in light mode and Font Family",
           "status": "fail",
           "summary": "keyboard pushes the dialog box offscreen, looks bad but functionality is fine",
-          "tc_number": "",
-          "defect_key": "JK26-3835-DRAFT"
+          "tc_number": ""
         },
         {
           "key": "TC032_SAP_Secendary AP login to view Sub-admin, end user, secondary AP's under manage user tab.All the page in light mode and Font Family",
@@ -392,255 +392,304 @@
         {
           "key": "TC042_AP_check API error message font and light mode display in Change Credit Limit page.",
           "name": "TC042_AP_check API error message font and light mode display in Change Credit Limit page.",
-          "status": "pending",
+          "status": "pass",
           "summary": "",
           "tc_number": "BDR-22846"
         },
         {
-          "defect_key": "JK26-3835-DRAFT",
+          "defect_key": "BDR-24739",
           "key": "TC043_AP User - View Add-Ons in Mobility Line Overview. All the page in light mode and Font Family",
           "name": "TC043_AP User - View Add-Ons in Mobility Line Overview. All the page in light mode and Font Family",
           "status": "fail",
-          "summary": "enable charging policy not displayed",
+          "summary": "i can subscribe to any addons from anywhere, on any type of user AP/EU, there for i can unsubscribe or change API, inline errors",
           "tc_number": "BDR-22848"
         },
         {
           "key": "TC045_AP User - View Short Codes. All the page in light mode and Font Family",
           "name": "TC045_AP User - View Short Codes. All the page in light mode and Font Family",
-          "tc_number": "BDR-22850",
+          "status": "pass",
           "summary": "en: pass, ar: pass",
-          "status": "pass"
+          "tc_number": "BDR-22850"
         },
         {
           "key": "TC046_AP user to add short codes. All the page in light mode and Font Family",
           "name": "TC046_AP user to add short codes. All the page in light mode and Font Family",
-          "tc_number": "BDR-22851",
+          "status": "pass",
           "summary": "pass",
-          "status": "pass"
+          "tc_number": "BDR-22851"
         },
         {
+          "defect_key": "BDR-23086",
           "key": "TC052_AP_check Inline error message font and light mode display in Short code page.",
           "name": "TC052_AP_check Inline error message font and light mode display in Short code page.",
-          "tc_number": "BDR-22857",
-          "summary": "inline error in short code feild looks fine, but the calling number doesnt match the short code field, the coloring is off",
           "status": "fail",
-          "defect_key": "BDR-23086"
+          "summary": "inline error in short code feild looks fine, but the calling number doesnt match the short code field, the coloring is off",
+          "tc_number": "BDR-22857"
         },
         {
           "key": "TC050_AP User - Suspend Short Codes. All the page in light mode and Font Family",
           "name": "TC050_AP User - Suspend Short Codes. All the page in light mode and Font Family",
-          "tc_number": "BDR-22855",
+          "status": "pass",
           "summary": "pass",
-          "status": "pass"
+          "tc_number": "BDR-22855"
         },
         {
           "key": "TC047_AP User - Manage Alias for short codes. All the page in light mode and Font Family",
           "name": "TC047_AP User - Manage Alias for short codes. All the page in light mode and Font Family",
-          "tc_number": "BDR-22852",
+          "status": "pass",
           "summary": "pass",
-          "status": "pass"
+          "tc_number": "BDR-22852"
         },
         {
           "key": "TC049_AP User - Delete Short Codes. All the page in light mode and Font Family",
           "name": "TC049_AP User - Delete Short Codes. All the page in light mode and Font Family",
-          "tc_number": "BDR-22854",
+          "status": "pass",
           "summary": "",
-          "status": "pass"
+          "tc_number": "BDR-22854"
         },
         {
           "key": "TC051_AP User - Resume Short Codes. All the page in light mode and Font Family",
           "name": "TC051_AP User - Resume Short Codes. All the page in light mode and Font Family",
-          "tc_number": "BDR-22856",
+          "status": "pass",
           "summary": "pass",
-          "status": "pass"
+          "tc_number": "BDR-22856"
         },
         {
           "key": "TC054_AP user View Line Settings under Line Management. All the page in light mode and Font Family",
           "name": "TC054_AP user View Line Settings under Line Management. All the page in light mode and Font Family",
-          "tc_number": "BDR-22859",
+          "status": "fail",
           "summary": "icons dont match figma design",
-          "status": "fail"
+          "tc_number": "BDR-22859"
         },
         {
           "key": "TC055_AP User Perform Action Enables on Line Settings. All the page in light mode and Font Family",
           "name": "TC055_AP User Perform Action Enables on Line Settings. All the page in light mode and Font Family",
-          "tc_number": "BDR-22860",
+          "status": "pass",
           "summary": "pass",
-          "status": "pass"
+          "tc_number": "BDR-22860"
         },
         {
           "key": "TC056_AP User � Enable View All Add-ons.All the page in light mode and Font Family",
           "name": "TC056_AP User � Enable View All Add-ons.All the page in light mode and Font Family",
-          "tc_number": "BDR-22861",
+          "status": "pass",
           "summary": "",
-          "status": "pass"
+          "tc_number": "BDR-22861"
         },
         {
           "key": "TC059_AP User � View Add-On Details under Add-On Management. All the page in light mode and Font Family",
           "name": "TC059_AP User � View Add-On Details under Add-On Management. All the page in light mode and Font Family",
-          "tc_number": "BDR-22864",
+          "status": "pass",
           "summary": "",
-          "status": "pass"
+          "tc_number": "BDR-22864"
         },
         {
           "key": "TC057_AP User - View and Track Package Commitments in Mobility Line Overview. All the page in light mode and Font Family",
           "name": "TC057_AP User - View and Track Package Commitments in Mobility Line Overview. All the page in light mode and Font Family",
-          "tc_number": "BDR-22862",
-          "summary": "",
-          "status": "pending"
+          "status": "pass",
+          "summary": "pass",
+          "tc_number": "BDR-22862"
         },
         {
           "key": "TC060_AP User � Subscribe to Add-On from Add-On Detail Screen. All the page in light mode and Font Family",
           "name": "TC060_AP User � Subscribe to Add-On from Add-On Detail Screen. All the page in light mode and Font Family",
-          "tc_number": "BDR-22865",
+          "status": "pending",
           "summary": "",
-          "status": "pending"
+          "tc_number": "BDR-22865"
         },
         {
           "key": "TC061_AP User � View Enabled Add-Ons(List).All the page in light mode and Font Family",
           "name": "TC061_AP User � View Enabled Add-Ons(List).All the page in light mode and Font Family",
-          "tc_number": "BDR-22866",
+          "status": "pass",
           "summary": "",
-          "status": "pass"
+          "tc_number": "BDR-22866"
         },
         {
           "key": "TC062_AP User � Bulk Disable Add-Ons from Enabled Add-Ons List. All the page in light mode and Font Family",
           "name": "TC062_AP User � Bulk Disable Add-Ons from Enabled Add-Ons List. All the page in light mode and Font Family",
-          "tc_number": "BDR-22867",
+          "status": "pass",
           "summary": "pass",
-          "status": "pass"
+          "tc_number": "BDR-22867"
         },
         {
           "key": "TC063_AP User � Bulk Change Charging Policy from Enabled Add-Ons List. All the page in light mode and Font Family",
           "name": "TC063_AP User � Bulk Change Charging Policy from Enabled Add-Ons List. All the page in light mode and Font Family",
-          "tc_number": "BDR-22868",
+          "status": "pass",
           "summary": "",
-          "status": "pending"
+          "tc_number": "BDR-22868"
         },
         {
           "key": "TC064_AP User � Unsubscribe Add-Ons under Subscriptions. All the page in light mode and Font Family",
           "name": "TC064_AP User � Unsubscribe Add-Ons under Subscriptions. All the page in light mode and Font Family",
-          "tc_number": "BDR-22869",
+          "status": "pass",
           "summary": "",
-          "status": "pass"
+          "tc_number": "BDR-22869"
         },
         {
           "key": "TC065_AP User � Enable Add-On for Multiple Mobile Numbers. All the page in light mode and Font Family",
           "name": "TC065_AP User � Enable Add-On for Multiple Mobile Numbers. All the page in light mode and Font Family",
-          "tc_number": "BDR-22870",
+          "status": "pass",
           "summary": "",
-          "status": "pass"
+          "tc_number": "BDR-22870"
         },
         {
           "key": "TC066_AP User � Disable Add-Ons for Multiple Mobile Numbers. All the page in light mode and Font Family",
           "name": "TC066_AP User � Disable Add-Ons for Multiple Mobile Numbers. All the page in light mode and Font Family",
-          "tc_number": "BDR-22871",
+          "status": "pass",
           "summary": "",
-          "status": "pass"
+          "tc_number": "BDR-22871"
         },
         {
           "key": "TC067_AP User � Subscribe to Add-Ons for Multiple Mobile Numbers. All the page in light mode and Font Family",
           "name": "TC067_AP User � Subscribe to Add-Ons for Multiple Mobile Numbers. All the page in light mode and Font Family",
-          "tc_number": "BDR-22872",
+          "status": "pass",
           "summary": "",
-          "status": "pass"
+          "tc_number": "BDR-22872"
         },
         {
           "key": "TC069_AP_check API error message font and light mode display in Subscribe to Add-Ons page.",
           "name": "TC069_AP_check API error message font and light mode display in Subscribe to Add-Ons page.",
-          "tc_number": "BDR-22874",
+          "status": "pass",
           "summary": "",
-          "status": "pass"
+          "tc_number": "BDR-22874"
         },
         {
           "key": "TC070_AP User � Unsubscribe to Add-Ons for Multiple Mobile Numbers. All the page in light mode and Font Family",
           "name": "TC070_AP User � Unsubscribe to Add-Ons for Multiple Mobile Numbers. All the page in light mode and Font Family",
-          "tc_number": "BDR-22875",
+          "status": "pass",
           "summary": "",
-          "status": "pass"
+          "tc_number": "BDR-22875"
         },
         {
           "key": "TC073_AP User Setting Common Credit Limit for Multiple Mobility Services. All the page in light mode and Font Family",
           "name": "TC073_AP User Setting Common Credit Limit for Multiple Mobility Services. All the page in light mode and Font Family",
-          "tc_number": "BDR-22878",
+          "status": "pass",
           "summary": "",
-          "status": "pass"
+          "tc_number": "BDR-22878"
         },
         {
           "key": "TC075_AP_check Inline error message font and light mode display in Bulk Credit Limit page.",
           "name": "TC075_AP_check Inline error message font and light mode display in Bulk Credit Limit page.",
-          "tc_number": "BDR-22880",
+          "status": "pass",
           "summary": "",
-          "status": "pass"
+          "tc_number": "BDR-22880"
         },
         {
           "key": "TC074_AP User Setting Bulk Credit Limit for Multiple Mobility Services. All the page in light mode and Font Family",
           "name": "TC074_AP User Setting Bulk Credit Limit for Multiple Mobility Services. All the page in light mode and Font Family",
-          "tc_number": "BDR-22879",
+          "status": "pass",
           "summary": "",
-          "status": "pass"
+          "tc_number": "BDR-22879"
         },
         {
           "key": "TC077_End User �View SIM details. All the page in light mode and Font Family",
           "name": "TC077_End User �View SIM details. All the page in light mode and Font Family",
-          "tc_number": "BDR-22882",
+          "status": "pass",
           "summary": "",
-          "status": "pass"
+          "tc_number": "BDR-22882"
         },
         {
           "key": "TC078_End User �View Add ons details. All the page in light mode and Font Family",
           "name": "TC078_End User �View Add ons details. All the page in light mode and Font Family",
-          "tc_number": "BDR-22883",
+          "status": "pass",
           "summary": "",
-          "status": "pass"
+          "tc_number": "BDR-22883"
         },
         {
+          "defect_key": "BDR-23285",
           "key": "TC079_End User �View Bills and Credit limit details. All the page in light mode and Font Family",
           "name": "TC079_End User �View Bills and Credit limit details. All the page in light mode and Font Family",
-          "tc_number": "BDR-22884",
-          "summary": "the eta in the top right isnt implemented. cant confirm the colors. evberything else loks fine. on both the EU, AP user",
           "status": "fail",
-          "defect_key": "BDR-23285"
+          "summary": "the eta in the top right isnt implemented. cant confirm the colors. evberything else loks fine. on both the EU, AP user",
+          "tc_number": "BDR-22884"
         },
         {
           "key": "TC080_End User � Subscribe Add-On.All the page in light mode and Font Family",
           "name": "TC080_End User � Subscribe Add-On.All the page in light mode and Font Family",
-          "tc_number": "BDR-22885",
+          "status": "pending",
           "summary": "",
-          "status": "pending"
+          "tc_number": "BDR-22885"
         },
         {
           "key": "TC081_End User � Unsubscribe Add-On.All the page in light mode and Font Family",
           "name": "TC081_End User � Unsubscribe Add-On.All the page in light mode and Font Family",
-          "tc_number": "BDR-22886",
+          "status": "pending",
           "summary": "",
-          "status": "pending"
+          "tc_number": "BDR-22886"
         },
         {
           "key": "TC082_AP_check download Terms and condition page in light mode.",
           "name": "TC082_AP_check download Terms and condition page in light mode.",
-          "tc_number": "BDR-22887",
+          "status": "pass",
           "summary": "",
-          "status": "pass"
+          "tc_number": "BDR-22887"
         },
         {
           "key": "TC083_AP_check download all lines in product and Services page in light mode.",
           "name": "TC083_AP_check download all lines in product and Services page in light mode.",
-          "tc_number": "BDR-22888",
+          "status": "pending",
           "summary": "",
-          "status": "pending"
+          "tc_number": "BDR-22888"
         },
         {
           "key": "TC058_AP User - View Device Commitments in Mobility Line Overview. All the page in light mode and Font Family",
           "name": "TC058_AP User - View Device Commitments in Mobility Line Overview. All the page in light mode and Font Family",
-          "tc_number": "BDR-22863",
+          "status": "pass",
           "summary": "",
-          "status": "pass"
+          "tc_number": "BDR-22863"
         },
         {
           "key": "TC030_AP user Escalate account Manager.Check All the page in light mode and Font Family",
           "name": "TC030_AP user Escalate account Manager.Check All the page in light mode and Font Family",
-          "tc_number": "BDR-22834",
+          "status": "pending",
+          "summary": "",
+          "tc_number": "BDR-22834"
+        },
+        {
+          "key": "TC048_AP User to Add Bulk Upload of Short Codes. All the page in light mode and Font Family",
+          "name": "TC048_AP User to Add Bulk Upload of Short Codes. All the page in light mode and Font Family",
+          "status": "pending",
+          "summary": "",
+          "tc_number": "BDR-22853"
+        },
+        {
+          "key": "TC076_AP_check API error message font and light mode display in Bulk Credit Limit page.",
+          "name": "TC076_AP_check API error message font and light mode display in Bulk Credit Limit page.",
+          "status": "pass",
+          "summary": "",
+          "tc_number": "BDR-22881"
+        },
+        {
+          "key": "TC053_AP_check API error message font and light mode display in Short code page.",
+          "name": "TC053_AP_check API error message font and light mode display in Short code page.",
+          "status": "pass",
+          "summary": "",
+          "tc_number": "BDR-22858"
+        },
+        {
+          "key": "TC044_End User - View Add-Ons in Mobility Line Overview. All the page in light mode and Font Family",
+          "name": "TC044_End User - View Add-Ons in Mobility Line Overview. All the page in light mode and Font Family",
+          "tc_number": "BDR-22849",
+          "summary": "",
+          "status": "fail"
+        },
+        {
+          "key": "TC068_AP_check Inline error message font and light mode display in Subscribe to Add-Ons page.",
+          "name": "TC068_AP_check Inline error message font and light mode display in Subscribe to Add-Ons page.",
+          "tc_number": "BDR-22873",
+          "summary": "",
+          "status": "pending"
+        },
+        {
+          "key": "TC071_AP_check Inline error message font and light mode display in Unsubscribe to Add-Ons page.",
+          "name": "TC071_AP_check Inline error message font and light mode display in Unsubscribe to Add-Ons page.",
+          "tc_number": "BDR-22876",
+          "summary": "",
+          "status": "pending"
+        },
+        {
+          "key": "TC072_AP_check API error message font and light mode display in Unsubscribe to Add-Ons page.",
+          "name": "TC072_AP_check API error message font and light mode display in Unsubscribe to Add-Ons page.",
+          "tc_number": "BDR-22877",
           "summary": "",
           "status": "pending"
         }
