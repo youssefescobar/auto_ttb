@@ -147,6 +147,12 @@ def rebuild_pot(te_key: str, test_cases: list) -> str:
         defect_key = tc.get('defect_key', "")
         expected_shots = tc.get('expected_shots', [])
         actual_shots = tc.get('actual_shots', [])
+        
+        # Get blocked TCs from submitted defect data if this is the failing TC
+        blocked_tcs = ""
+        if tc.get('submitted_defect'):
+            blocked_tcs = tc.get('submitted_defect', {}).get('blocked_tcs', "")
+        blocked_by = tc.get('blocked_by', "")
 
         # Status colors
         if status_str == 'PASS':
@@ -158,6 +164,9 @@ def rebuild_pot(te_key: str, test_cases: list) -> str:
         elif status_str == 'PENDING':
             status_bg = "FEF3C7"
             status_fg = RGBColor(217, 119, 6) # amber
+        elif status_str == 'BLOCKED':
+            status_bg = "F3E8FF"
+            status_fg = RGBColor(168, 85, 247) # purple
         else: # SKIP or other
             status_bg = "F1F5F9"
             status_fg = RGBColor(100, 116, 139) # gray
@@ -212,6 +221,30 @@ def rebuild_pot(te_key: str, test_cases: list) -> str:
             r_def_txt.font.bold = True
             r_def_txt.font.size = Pt(8.5)
             r_def_txt.font.color.rgb = RGBColor(185, 28, 28)
+            
+        if blocked_tcs:
+            p_blk = cell_left.add_paragraph()
+            p_blk.paragraph_format.space_before = Pt(0)
+            p_blk.paragraph_format.space_after = Pt(0)
+            r_blk_lbl = p_blk.add_run("Blocks TCs: ")
+            r_blk_lbl.font.bold = True
+            r_blk_lbl.font.size = Pt(8.5)
+            r_blk_lbl.font.color.rgb = RGBColor(168, 85, 247)
+            r_blk_txt = p_blk.add_run(blocked_tcs)
+            r_blk_txt.font.size = Pt(8.5)
+            r_blk_txt.font.color.rgb = RGBColor(168, 85, 247)
+            
+        if blocked_by:
+            p_bby = cell_left.add_paragraph()
+            p_bby.paragraph_format.space_before = Pt(0)
+            p_bby.paragraph_format.space_after = Pt(0)
+            r_bby_lbl = p_bby.add_run("Blocked By: ")
+            r_bby_lbl.font.bold = True
+            r_bby_lbl.font.size = Pt(8.5)
+            r_bby_lbl.font.color.rgb = RGBColor(168, 85, 247)
+            r_bby_txt = p_bby.add_run(blocked_by)
+            r_bby_txt.font.size = Pt(8.5)
+            r_bby_txt.font.color.rgb = RGBColor(168, 85, 247)
 
         if status_str == 'PENDING':
             p_pen = cell_left.add_paragraph()
@@ -240,7 +273,7 @@ def rebuild_pot(te_key: str, test_cases: list) -> str:
             p_lbl_e.paragraph_format.space_after = Pt(2)
             r_lbl_e = p_lbl_e.add_run("Expected Result Screenshots")
             r_lbl_e.font.bold = True
-            r_lbl_e.font.size = Pt(9)
+            r_lbl_e.font.size = Pt(7.5)
             r_lbl_e.font.color.rgb = RGBColor(30, 41, 59)
             
             p_img_e = doc.add_paragraph()
@@ -249,7 +282,7 @@ def rebuild_pot(te_key: str, test_cases: list) -> str:
                 if os.path.exists(img_path):
                     try:
                         run = p_img_e.add_run()
-                        run.add_picture(img_path, width=Inches(3.2))
+                        run.add_picture(img_path, height=Inches(1.5))
                         p_img_e.add_run("  ")
                     except Exception:
                         pass
@@ -261,7 +294,7 @@ def rebuild_pot(te_key: str, test_cases: list) -> str:
             p_lbl_a.paragraph_format.space_after = Pt(2)
             r_lbl_a = p_lbl_a.add_run("Actual Result Screenshots")
             r_lbl_a.font.bold = True
-            r_lbl_a.font.size = Pt(9)
+            r_lbl_a.font.size = Pt(7.5)
             r_lbl_a.font.color.rgb = RGBColor(30, 41, 59)
             
             p_img_a = doc.add_paragraph()
@@ -270,7 +303,7 @@ def rebuild_pot(te_key: str, test_cases: list) -> str:
                 if os.path.exists(img_path):
                     try:
                         run = p_img_a.add_run()
-                        run.add_picture(img_path, width=Inches(3.2))
+                        run.add_picture(img_path, height=Inches(1.5))
                         p_img_a.add_run("  ")
                     except Exception:
                         pass
@@ -399,7 +432,7 @@ def append_tc_pot(
     has_exp = len(expected_shots) > 0
     has_act = len(actual_shots) > 0
 
-    MAX_IMG_HEIGHT = Inches(1.45)
+    MAX_IMG_HEIGHT = Inches(1.0)
 
     if has_exp and has_act:
         # 2-column side-by-side table comparing Expected vs Actual
@@ -424,7 +457,7 @@ def append_tc_pot(
         p_h1.paragraph_format.space_after = Pt(0)
         r_h1 = p_h1.add_run("Expected Result (Figma / Design)")
         r_h1.font.bold = True
-        r_h1.font.size = Pt(8.5)
+        r_h1.font.size = Pt(7.5)
         r_h1.font.color.rgb = RGBColor(30, 41, 59)
 
         p_h2 = c_hdr_act.paragraphs[0]
@@ -432,7 +465,7 @@ def append_tc_pot(
         p_h2.paragraph_format.space_after = Pt(0)
         r_h2 = p_h2.add_run("Actual Result (Test Evidence)")
         r_h2.font.bold = True
-        r_h2.font.size = Pt(8.5)
+        r_h2.font.size = Pt(7.5)
         r_h2.font.color.rgb = RGBColor(30, 41, 59)
 
         # Image Cells

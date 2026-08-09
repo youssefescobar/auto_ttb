@@ -397,11 +397,24 @@ def api_fetch_jira_te():
         if result.get("test_cases"):
             existing_te = db.get_te(te_key)
             existing_tcs = existing_te.get("test_cases", [])
+            # Also check existing tc_number to avoid duplicates
             existing_keys = {tc.get("key") for tc in existing_tcs}
+            existing_keys.update({tc.get("tc_number") for tc in existing_tcs if tc.get("tc_number")})
 
-            for new_tc in result["test_cases"]:
-                if new_tc not in existing_keys:
-                    existing_tcs.append({"key": new_tc, "summary": "", "status": "pending"})
+            for new_tc_dict in result["test_cases"]:
+                tc_id = new_tc_dict["key"]
+                tc_title = new_tc_dict["name"]
+                
+                final_name = tc_title if tc_title != tc_id else tc_id
+
+                if tc_id not in existing_keys and final_name not in existing_keys:
+                    existing_tcs.append({
+                        "key": final_name, 
+                        "name": final_name,
+                        "tc_number": tc_id,
+                        "summary": "", 
+                        "status": "pending"
+                    })
 
             db.save_te(te_key, existing_tcs)
 

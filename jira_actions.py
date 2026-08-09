@@ -679,8 +679,18 @@ def create_defect(
         _fill_select(page, "#customfield_31100", config.get("uat_priority", "No"))
         time.sleep(0.2)
 
-        # Note: Screenshots are NOT attached directly to defect form per user preference.
-        # They will be attached as a comment after issue creation.
+        # Attach screenshots to defect form
+        valid_shots = [p for p in (screenshot_paths or []) if os.path.exists(p)]
+        if valid_shots:
+            print(f"  -> Attaching {len(valid_shots)} screenshots to defect form...")
+            for file_sel in ["input[type='file']", "input.issue-drop-zone__file-input"]:
+                if page.locator(file_sel).count() > 0:
+                    try:
+                        page.set_input_files(file_sel, valid_shots)
+                        time.sleep(2)
+                        break
+                    except Exception as e:
+                        print(f"  [!] Could not attach screenshots to form: {e}")
 
         # --- SUBMIT ISSUE ---
         should_auto_submit = config.get("auto_submit_defect", False)
@@ -710,7 +720,11 @@ def create_defect(
         # Wait for created issue key (e.g. BDR-1234 or JK26-5678) after manual or auto submission
         issue_key = None
         try:
-            page.wait_for_selector(".aui-message-success, #key-val, a.issue-created-key, h1.item-summary", timeout=300000)
+            if not should_auto_submit:
+                # Wait until navigation away from CreateIssue page
+                page.wait_for_function("!window.location.href.includes('CreateIssue')", timeout=300000)
+            
+            page.wait_for_selector(".aui-message-success, #key-val, a.issue-created-key, h1.item-summary", timeout=30000)
             if page.locator("#key-val").count() > 0:
                 issue_key = page.locator("#key-val").first.inner_text().strip()
             elif page.locator("a.issue-created-key").count() > 0:
@@ -780,7 +794,11 @@ def add_comment_with_screenshots(issue_key: str, comment_text: str, screenshot_p
 
             # Wait for user to submit comment manually
             try:
-                page.wait_for_selector(".issue-data-block, .activity-comment, div[id^='comment-']", timeout=180000)
+                # Wait until the comment textarea is no longer visible (meaning it was submitted or cancelled)
+                page.wait_for_function(
+                    "() => !document.querySelector('#comment') || document.querySelector('#comment').offsetParent === null",
+                    timeout=300000
+                )
             except Exception:
                 pass
 
@@ -807,6 +825,8 @@ def fetch_te_from_jira(te_key: str) -> dict:
         page = context.new_page()
         page.goto(url)
         page.wait_for_load_state("domcontentloaded")
+        # Give dynamic plugins (like Xray/Zephyr) time to load their tables
+        page.wait_for_timeout(5000)
 
         summary = ""
         for sum_sel in ["#summary-val", "h1#summary-val", "h1.item-summary", "h1"]:
@@ -814,24 +834,66 @@ def fetch_te_from_jira(te_key: str) -> dict:
                 summary = page.locator(sum_sel).first.inner_text().strip()
                 break
 
-        tc_keys = set()
-        links = page.locator("a[href*='/browse/']").all()
-        for link in links:
-            try:
-                href = link.get_attribute("href") or ""
-                match = re.search(r'/browse/([A-Za-z0-9_\-\.]+)', href)
-                if match:
-                    key = match.group(1).upper()
-                    if key != te_key.upper() and ("TC" in key or key.startswith("TC-") or key.startswith("QA-")):
-                        tc_keys.add(key)
-            except Exception:
-                pass
+        tc_data = {}
+        page_num = 1
+        while True:
+            print(f"  -> Scraping page {page_num}...")
+            prev_len = len(tc_data)
+            
+            links = page.locator("a[href*='/browse/']").all()
+            for link in links:
+                try:
+                    href = link.get_attribute("href") or ""
+                    match = re.search(r'/browse/([A-Za-z0-9]+-\d+)', href)
+                    if match:
+                        key = match.group(1).upper()
+                        if key != te_key.upper():
+                            text = link.inner_text().strip()
+                            if key not in tc_data:
+                                tc_data[key] = text
+                            elif len(text) > len(tc_data[key]):
+                                tc_data[key] = text
+                except Exception:
+                    pass
+
+            if page_num > 1 and len(tc_data) == prev_len:
+                print("  -> No new test cases found on this page. Reached the end.")
+                break
+
+            # Check for 'Next' button
+            next_btn = None
+            for sel in [
+                "a.icon-next:not([disabled]):not([aria-disabled='true']):not(.disabled)", 
+                ".aui-nav-next a:not([disabled]):not([aria-disabled='true']):not(.disabled)", 
+                "#exec-entries-table_next:not(.disabled):not([disabled]):not([aria-disabled='true'])",
+                ".paginate_button.next:not(.disabled):not([disabled]):not([aria-disabled='true'])"
+            ]:
+                loc = page.locator(sel)
+                if loc.count() > 0 and loc.first.is_visible():
+                    next_btn = loc.first
+                    break
+            
+            if next_btn:
+                print("  -> Found 'Next' page. Clicking...")
+                try:
+                    next_btn.click(timeout=3000)
+                    page.wait_for_timeout(3000)
+                    page_num += 1
+                except Exception as e:
+                    print(f"  -> Could not click 'Next' button: {e}")
+                    break
+            else:
+                break
+                
+        # Convert tc_data dict to a list of dicts
+        tcs_list = [{"key": k, "name": v} for k, v in tc_data.items()]
+        tcs_list = sorted(tcs_list, key=lambda x: x["key"])
 
         browser.close()
         return {
             "te_key": te_key,
             "summary": summary,
-            "test_cases": sorted(list(tc_keys)),
+            "test_cases": tcs_list,
             "url": url
         }
 

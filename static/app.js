@@ -309,13 +309,13 @@ function renderTCGrid() {
         <button class="btn btn-outline btn-xs btn-jira-link" data-tc="${tc.key}" title="${tcNum ? 'Open ' + tcNum + ' in Jira' : 'Set Jira TC Number'}">
           ${tcNum ? `🔗 ${tcNum}` : '🔗 Add Jira #'}
         </button>
-        ${tc.defect_key ? `<span class="badge text-xs" style="background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4)">🐛 Defect: ${tc.defect_key}</span>` : ''}
+        ${tc.defect_key ? `<button class="btn btn-outline btn-xs btn-view-defect" data-tc="${tc.key}" title="View Submitted Defect" style="background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4)">🐛 Defect: ${tc.defect_key}</button>` : ''}
         ${tc.blocked_by ? `<span class="badge text-xs" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4)">🚫 Blocked By: ${tc.blocked_by}</span>` : ''}
       </div>
     `;
 
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.tc-card-delete-btn') || e.target.closest('.btn-jira-link')) return;
+      if (e.target.closest('.tc-card-delete-btn') || e.target.closest('.btn-jira-link') || e.target.closest('.btn-view-defect')) return;
       selectTC(tc.key);
     });
 
@@ -335,9 +335,40 @@ function renderTCGrid() {
       });
     }
 
+    const viewDefectBtn = card.querySelector('.btn-view-defect');
+    if (viewDefectBtn) {
+      viewDefectBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        viewDefect(tc.key);
+      });
+    }
+
     grid.appendChild(card);
   });
   updateProgress();
+}
+
+async function viewDefect(tcKey) {
+  state.currentTC = tcKey;
+  const tc = state.testCases.find(t => t.key === tcKey);
+  if (!tc) return;
+
+  hide($('#te-input-section'));
+  hide($('#tc-grid-section'));
+  hide($('#tc-detail-section'));
+  show($('#defect-preview-section'));
+  
+  $('#defect-preview-title').textContent = `Jira Defect Ticket Preview — ${tcKey}`;
+
+  const existingDraft = state.defectDrafts[tcKey];
+  if (existingDraft) {
+    populateDefectForm(existingDraft);
+  } else if (tc.submitted_defect) {
+    populateDefectForm(tc.submitted_defect);
+  } else {
+    clearDefectForm();
+  }
+  updateFixedFieldsDisplay();
 }
 
 async function deleteTC(tcKey) {
@@ -761,23 +792,7 @@ async function passTC() {
   tc.status = 'pass';
   saveExecutionState();
 
-  // Always save to POT — no Jira transitions, no browser automation
-  try {
-    await api('POST', '/api/save-pot', {
-      tc_key: tc.key,
-      tc_name: tc.name || tc.key,
-      tc_number: tc.tc_number || null,
-      te_key: state.teKey,
-      status: 'PASS',
-      summary: tc.summary,
-      expected_shots: getShotPaths('expected'),
-      actual_shots: getShotPaths('actual'),
-      defect_key: null
-    });
-    showToast(`✅ ${tc.name || state.currentTC} PASSED & saved to POT`, 'success');
-  } catch (e) {
-    showToast(`✅ ${tc.name || state.currentTC} PASSED (POT save failed: ${e.message})`, 'warning');
-  }
+  showToast(`✅ ${tc.name || state.currentTC} PASSED`, 'success');
   advanceToNextTC();
 }
 
