@@ -34,31 +34,30 @@ def start_login_session():
                 browser = p.chromium.launch(headless=False)
                 context = browser.new_context()
                 page = context.new_page()
-                page.goto(config.JIRA_BASE_URL)
+                page.goto(config.JIRA_BASE_URL, timeout=0)
 
                 with _login_lock:
                     _login_state["status"] = "open"
                     _login_state["message"] = "Browser open! Log into Jira, then click 'Save Jira Session' in web app."
                 print(f"[+] Login browser launched to {config.JIRA_BASE_URL}")
 
-                # Wait on this thread for save request or timeout (5 minutes)
-                save_triggered = _save_requested_event.wait(timeout=300)
-
-                if save_triggered:
-                    with _login_lock:
-                        _login_state["status"] = "saving"
-                    context.storage_state(path=config.BROWSER_STATE_PATH)
-                    browser.close()
-                    with _login_lock:
-                        _login_state["status"] = "saved"
-                        _login_state["message"] = "Session saved successfully!"
-                    print(f"[+] Session saved successfully to '{config.BROWSER_STATE_PATH}'.")
-                else:
-                    browser.close()
-                    with _login_lock:
-                        _login_state["status"] = "idle"
-                        _login_state["message"] = "Login timed out after 5 minutes."
-                    print("[!] Login browser closed due to timeout.")
+                # Loop to keep the browser open and handle save requests
+                while not page.is_closed():
+                    save_triggered = _save_requested_event.wait(timeout=1.0)
+                    if save_triggered:
+                        with _login_lock:
+                            _login_state["status"] = "saving"
+                        context.storage_state(path=config.BROWSER_STATE_PATH)
+                        with _login_lock:
+                            _login_state["status"] = "saved"
+                            _login_state["message"] = "Session saved successfully!"
+                        print(f"[+] Session saved successfully to '{config.BROWSER_STATE_PATH}'.")
+                        _save_requested_event.clear()
+                        
+                with _login_lock:
+                    _login_state["status"] = "idle"
+                    _login_state["message"] = "Login browser was closed manually."
+                print("[!] Login browser closed manually.")
 
         except Exception as e:
             with _login_lock:

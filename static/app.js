@@ -181,21 +181,25 @@ async function checkSession() {
     const loginBtn = $('#btn-login');
     const saveBtn = $('#btn-save-session');
 
+    if (res.status === 'open' || res.status === 'opening') {
+      if (dot) { dot.className = 'session-indicator warning'; dot.title = 'Browser open — log into Jira, then click Save Jira Session'; }
+      if (loginBtn) hide(loginBtn);
+      if (saveBtn) { show(saveBtn); saveBtn.textContent = '💾 Save Jira Session'; }
+      return;
+    }
+
     if (res.exists && res.mtime) {
       const ageHours = (Date.now() / 1000 - res.mtime) / 3600;
       if (ageHours > 6) {
         const ageStr = ageHours > 24 ? `${Math.floor(ageHours / 24)}d ago` : `${Math.floor(ageHours)}h ago`;
         if (dot) { dot.className = 'session-indicator warning'; dot.title = `Session may be expired (saved ${ageStr})`; }
         if (loginBtn) { show(loginBtn); loginBtn.textContent = `⚠️ Session Old (${ageStr})`; }
+        if (saveBtn) hide(saveBtn);
         return; // skip the normal status display below
       }
     }
 
-    if (res.status === 'open') {
-      if (dot) { dot.className = 'session-indicator warning'; dot.title = 'Browser open — log into Jira, then click Save Jira Session'; }
-      if (loginBtn) hide(loginBtn);
-      if (saveBtn) { show(saveBtn); saveBtn.textContent = '💾 Save Jira Session'; }
-    } else if (res.exists) {
+    if (res.exists) {
       if (dot) { dot.className = 'session-indicator active'; dot.title = 'Jira session active'; }
       if (loginBtn) { show(loginBtn); loginBtn.textContent = '✓ Jira Logged In'; }
       if (saveBtn) hide(saveBtn);
