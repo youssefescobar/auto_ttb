@@ -5,10 +5,19 @@
 const state = {
   teKey: '',
   testCases: [],
+  teLang: 'EN',
+  
+  linkedTeKey: '',
+  linkedTeEnabled: false,
+  linkedTestCases: [],
+  linkedTeLang: 'AR',
+  
+  activeContext: 'primary', // 'primary' or 'secondary'
+  
   currentTC: null,
   screenshots: { expected: [], actual: [] },
   settings: {},
-  defectDrafts: {},  // keyed by TC key, persists drafts without re-calling AI
+  defectDrafts: {},
 };
 
 
@@ -18,10 +27,11 @@ const show = el => { if (el) el.classList.remove('hidden'); };
 const hide = el => { if (el) el.classList.add('hidden'); };
 
 function advanceToNextTC() {
-  const nextPending = state.testCases.find(tc => tc.key !== state.currentTC && tc.status === 'pending');
-  if (nextPending) {
-    showToast(`Auto-advancing to ${nextPending.name || nextPending.key}`, 'info');
-    selectTC(nextPending.key);
+  const currentIndex = state.testCases.findIndex(tc => tc.key === state.currentTC);
+  if (currentIndex !== -1 && currentIndex + 1 < state.testCases.length) {
+    const nextTC = state.testCases[currentIndex + 1];
+    showToast(`Auto-advancing to ${nextTC.name || nextTC.key}`, 'info');
+    selectTC(nextTC.key);
   } else {
     goBackToGrid();
   }
@@ -146,8 +156,38 @@ async function loadSettings() {
       }
     }
     updateFixedFieldsDisplay();
+    await loadSettingsHistory();
   } catch (e) {
     console.error('Failed to load settings:', e);
+  }
+}
+
+async function loadSettingsHistory() {
+  try {
+    const history = await api('GET', '/api/settings-history');
+    state.settingsHistory = history || {};
+    // Populate all history dropdowns
+    document.querySelectorAll('.history-dropdown').forEach(select => {
+      const fieldName = select.dataset.for;
+      if (!fieldName) return;
+      const options = history[fieldName] || [];
+      // Clear existing options beyond the placeholder
+      select.innerHTML = '<option value="">\u2014 saved \u2014</option>';
+      if (options.length > 0) {
+        options.forEach(opt => {
+          const optEl = document.createElement('option');
+          optEl.value = opt;
+          optEl.textContent = opt.length > 30 ? opt.substring(0, 30) + '...' : opt;
+          optEl.title = opt;
+          select.appendChild(optEl);
+        });
+        select.classList.remove('hidden');
+      } else {
+        select.classList.add('hidden');
+      }
+    });
+  } catch (e) {
+    console.error('Failed to load settings history:', e);
   }
 }
 
@@ -156,6 +196,7 @@ async function saveSettings() {
   const data = {};
   for (const el of form.elements) {
     if (!el.name) continue;
+    if (el.classList && el.classList.contains('history-dropdown')) continue;
     if (el.type === 'checkbox') {
       data[el.name] = el.checked;
     } else {
@@ -165,14 +206,24 @@ async function saveSettings() {
   
   try {
     await api('POST', '/api/settings', data);
+    // Save values as history options for future quick switching
+    const historyData = {};
+    for (const [key, val] of Object.entries(data)) {
+      if (typeof val === 'string' && val.trim()) {
+        historyData[key] = val.trim();
+      }
+    }
+    await api('POST', '/api/settings-history', historyData);
     state.settings = { ...state.settings, ...data };
     updateFixedFieldsDisplay();
-    showToast('Settings & Jira defaults saved', 'success');
+    showToast('\u2705 Settings saved', 'success');
     toggleSettings(false);
+    await loadSettingsHistory();
   } catch (e) {
     showToast('Failed to save settings', 'error');
   }
 }
+
 
 async function checkSession() {
   try {
@@ -277,7 +328,12 @@ function renderTCGrid() {
   }
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
-    filtered = filtered.filter(tc => (tc.key && tc.key.toLowerCase().includes(q)) || (tc.summary && tc.summary.toLowerCase().includes(q)));
+    filtered = filtered.filter(tc => 
+      (tc.key && tc.key.toLowerCase().includes(q)) || 
+      (tc.summary && tc.summary.toLowerCase().includes(q)) ||
+      (tc.tc_number && tc.tc_number.toLowerCase().includes(q)) ||
+      (tc.name && tc.name.toLowerCase().includes(q))
+    );
   }
 
   if (filtered.length === 0) {
@@ -352,17 +408,12 @@ function renderTCGrid() {
   updateProgress();
 }
 
-async function viewDefect(tcKey) {
-  state.currentTC = tcKey;
-  const tc = state.testCases.find(t => t.key === tcKey);
+function refreshDefectView() {
+  const tc = getActiveTC();
   if (!tc) return;
-
-  hide($('#te-input-section'));
-  hide($('#tc-grid-section'));
-  hide($('#tc-detail-section'));
-  show($('#defect-preview-section'));
   
-  $('#defect-preview-title').textContent = `Jira Defect Ticket Preview — ${tcKey}`;
+  const tcKey = tc.key;
+  $('#defect-preview-title').textContent = `Defect Preview — ${tcKey}`;
 
   const existingDraft = state.defectDrafts[tcKey];
   if (existingDraft) {
@@ -373,6 +424,26 @@ async function viewDefect(tcKey) {
     clearDefectForm();
   }
   updateFixedFieldsDisplay();
+}
+
+async function viewDefect(tcKey) {
+  state.currentTC = tcKey;
+  state.activeContext = 'primary';
+  const tc = state.testCases.find(t => t.key === tcKey);
+  if (!tc) return;
+
+  hide($('#te-input-section'));
+  hide($('#tc-grid-section'));
+  hide($('#tc-detail-section'));
+  show($('#defect-preview-section'));
+  
+  if (state.linkedTeEnabled && state.linkedTeKey) {
+    show($('#defect-bilingual-toggle-container'));
+  } else {
+    hide($('#defect-bilingual-toggle-container'));
+  }
+
+  setBilingualContext('primary');
 }
 
 async function deleteTC(tcKey) {
@@ -392,8 +463,7 @@ async function deleteTC(tcKey) {
       await api('POST', '/api/delete-tc', { te_key: state.teKey, tc_key: tcKey });
     } catch (e) {}
   }
-
-  showToast(`Deleted ${tcKey}`, 'info');
+    showToast(`Deleted ${tcKey}`, 'info');
 }
 
 async function loadTE(teKey) {
@@ -401,10 +471,43 @@ async function loadTE(teKey) {
   state.teKey = teKey;
 
   try {
-    const saved = await api('GET', `/api/execution-state/${teKey}`);
+    const saved = await api('GET', `/api/execution-state/${encodeURIComponent(teKey)}`);
     state.testCases = Array.isArray(saved.test_cases) ? saved.test_cases : [];
+    
+    state.teLang = saved.language || 'English';
+    state.linkedTeKey = saved.linked_te || '';
+    state.linkedTeEnabled = !!saved.linked_te_enabled;
+    
+    const envSelect = $('#te-env-select');
+    if (envSelect && saved.environment) {
+      envSelect.value = saved.environment;
+    }
+    const langSelect = $('#te-lang-select');
+    if (langSelect && saved.language) {
+      langSelect.value = saved.language;
+    }
+    
+    const linkToggle = $('#te-link-toggle');
+    const linkInput = $('#te-link-input');
+    if (linkToggle) linkToggle.checked = !!saved.linked_te_enabled;
+    if (linkInput) linkInput.value = saved.linked_te || '';
+    
+    if (state.linkedTeEnabled && state.linkedTeKey) {
+       try {
+         const linkedSaved = await api('GET', `/api/execution-state/${encodeURIComponent(state.linkedTeKey)}`);
+         state.linkedTestCases = Array.isArray(linkedSaved.test_cases) ? linkedSaved.test_cases : [];
+         state.linkedTeLang = linkedSaved.language || 'Arabic';
+       } catch (le) {
+         state.linkedTestCases = [];
+         state.linkedTeLang = 'Unknown';
+       }
+    } else {
+       state.linkedTestCases = [];
+    }
+    
   } catch (e) {
     state.testCases = [];
+    state.linkedTestCases = [];
   }
 
   $('#tc-grid-title').textContent = `Test Cases — ${teKey}`;
@@ -415,6 +518,8 @@ async function loadTE(teKey) {
   if (breadcrumb) { show(breadcrumb); }
   if (breadcrumbTE) { breadcrumbTE.textContent = teKey; }
   renderTCGrid();
+  loadDraftQueue();
+  checkUserStory();
   showToast(`TE ${teKey} loaded`, 'success');
 }
 
@@ -433,6 +538,31 @@ function parseTC(input) {
   // Also handle plain Jira keys like QA-335480 as the TC itself
   const isJiraKey = /^[A-Z]+-\d+$/i.test(trimmed);
   return { jiraNumber: isJiraKey ? trimmed.toUpperCase() : '', tcKey: trimmed };
+}
+
+function raiseAdHocDefect() {
+  const adHocKey = `AdHoc-Defect-${Math.floor(Math.random() * 10000)}`;
+  state.testCases.push({
+    key: adHocKey,
+    name: 'Ad-Hoc Issue / General Defect',
+    tc_number: '',
+    summary: 'General issue found during execution',
+    status: 'fail'
+  });
+  saveExecutionState();
+  renderTCGrid();
+  selectTC(adHocKey);
+  
+  // Auto focus the defect summary field
+  setTimeout(() => {
+    const summaryInput = $('#tc-actual');
+    if (summaryInput) {
+      summaryInput.value = '';
+      summaryInput.focus();
+    }
+  }, 100);
+  
+  showToast('Ad-Hoc defect created! Please describe the issue.', 'info');
 }
 
 function addTC(tcKey) {
@@ -482,10 +612,15 @@ function addMultipleTCs(text) {
 }
 
 async function saveExecutionState() {
-  if (!state.teKey) return;
-  try {
-    await api('POST', `/api/execution-state/${state.teKey}`, { test_cases: state.testCases });
-  } catch (e) {}
+  if (state.activeContext === 'primary' && state.teKey) {
+    try {
+      await api('POST', `/api/execution-state/${state.teKey}`, { test_cases: state.testCases });
+    } catch (e) {}
+  } else if (state.activeContext === 'secondary' && state.linkedTeKey) {
+    try {
+      await api('POST', `/api/execution-state/${state.linkedTeKey}`, { test_cases: state.linkedTestCases });
+    } catch (e) {}
+  }
 }
 
 let activeUploadCategory = 'actual';
@@ -523,29 +658,109 @@ function setActiveCategory(cat) {
   }
 }
 
-function selectTC(tcKey) {
-  state.currentTC = tcKey;
-  const tc = state.testCases.find(t => t.key === tcKey);
-  if (!tc) return;
+function getActiveTC() {
+  if (!state.currentTC) return null;
+  const tcs = state.activeContext === 'primary' ? state.testCases : state.linkedTestCases;
+  
+  if (state.activeContext === 'primary') {
+    return tcs.find(t => t.key === state.currentTC);
+  }
+  
+  const primaryTC = state.testCases.find(t => t.key === state.currentTC);
+  if (!primaryTC) return null;
+  
+  let target = null;
+  if (primaryTC.tc_number) {
+    target = tcs.find(t => t.tc_number === primaryTC.tc_number);
+  }
+  if (!target) {
+    target = tcs.find(t => t.key === primaryTC.key);
+  }
+  return target;
+}
 
-  hide($('#tc-grid-section'));
-  hide($('#defect-preview-section'));
-  show($('#tc-detail-section'));
+function setBilingualContext(context) {
+  state.activeContext = context;
+  const isPrimary = context === 'primary';
+  
+  const btnEn = $('#toggle-lang-en');
+  const btnAr = $('#toggle-lang-ar');
+  const btnDefEn = $('#defect-toggle-lang-en');
+  const btnDefAr = $('#defect-toggle-lang-ar');
+
+  if (btnEn) {
+    btnEn.classList.toggle('active', isPrimary);
+    btnEn.textContent = (state.teLang || 'EN').toUpperCase().substring(0, 2);
+  }
+  if (btnAr) {
+    btnAr.classList.toggle('active', !isPrimary);
+    btnAr.textContent = (state.linkedTeLang || 'AR').toUpperCase().substring(0, 2);
+  }
+  if (btnDefEn) {
+    btnDefEn.classList.toggle('active', isPrimary);
+    btnDefEn.textContent = (state.teLang || 'EN').toUpperCase().substring(0, 2);
+  }
+  if (btnDefAr) {
+    btnDefAr.classList.toggle('active', !isPrimary);
+    btnDefAr.textContent = (state.linkedTeLang || 'AR').toUpperCase().substring(0, 2);
+  }
+
+  if (state.currentTC) {
+    if (!$('#tc-detail-section').classList.contains('hidden')) {
+      refreshTCDetailView();
+    } else if (!$('#defect-preview-section').classList.contains('hidden')) {
+      refreshDefectView();
+    }
+  }
+}
+
+function refreshTCDetailView() {
+  const tc = getActiveTC();
+  if (!tc && state.activeContext === 'secondary') {
+    showToast('This test case does not exist in the linked execution.', 'warning');
+    $('#detail-tc-status').textContent = 'NOT FOUND';
+    $('#detail-tc-status').className = 'status-badge pending';
+    $('#tc-summary').value = '';
+    state.screenshots = { expected: [], actual: [] };
+    renderThumbnails('expected');
+    renderThumbnails('actual');
+    return;
+  }
+  if (!tc) return;
 
   $('#detail-tc-key').textContent = tc.name || tc.key;
   const numInput = $('#tc-number-input');
-  if (numInput) {
-    numInput.value = tc.tc_number || '';
-  }
+  if (numInput) numInput.value = tc.tc_number || '';
 
   const badge = $('#detail-tc-status');
   badge.textContent = (tc.status || 'pending').toUpperCase();
   badge.className = `status-badge ${tc.status || 'pending'}`;
 
   $('#tc-summary').value = tc.summary || '';
-
   setActiveCategory('actual');
-  loadExistingScreenshots(tcKey);
+  loadExistingScreenshots(tc.key);
+}
+
+function selectTC(tcKey) {
+  state.currentTC = tcKey;
+  state.activeContext = 'primary';
+  
+  const tc = state.testCases.find(t => t.key === tcKey);
+  if (!tc) return;
+
+  hide($('#tc-grid-section'));
+  hide($('#defect-preview-section'));
+  show($('#tc-detail-section'));
+  
+  if (state.linkedTeEnabled && state.linkedTeKey) {
+    show($('#bilingual-toggle-container'));
+  } else {
+    hide($('#bilingual-toggle-container'));
+  }
+
+  setBilingualContext('primary');
+  updateTestGuideUI(tc);
+  toggleGuidePanel(true);
 }
 
 function openJiraTC(tcKey) {
@@ -573,11 +788,15 @@ function openJiraTC(tcKey) {
 
 async function loadExistingScreenshots(tcKey) {
   state.screenshots = { expected: [], actual: [] };
+  const targetTeKey = state.activeContext === 'primary' ? state.teKey : state.linkedTeKey;
+  if (!targetTeKey) return;
   try {
-    const res = await api('GET', `/api/screenshots/${state.teKey}/${tcKey}`);
+    const res = await api('GET', `/api/screenshots/${encodeURIComponent(targetTeKey)}/${encodeURIComponent(tcKey)}`);
     state.screenshots.expected = res.expected || [];
     state.screenshots.actual = res.actual || [];
-  } catch (e) {}
+  } catch (e) {
+    console.error("Failed to load existing screenshots:", e);
+  }
   renderThumbnails('expected');
   renderThumbnails('actual');
 }
@@ -594,7 +813,6 @@ function goHome() {
 }
 
 function goBackToGrid() {
-  // Snapshot defect form back to drafts so manual edits persist
   if (state.currentTC && !$('#defect-preview-section').classList.contains('hidden')) {
     state.defectDrafts[state.currentTC] = {
       ...(state.defectDrafts[state.currentTC] || {}),
@@ -617,7 +835,6 @@ function goBackToGrid() {
   renderTCGrid();
 }
 
-// Screenshot Dropzones & Upload
 function setupDropZone(cat) {
   const box = $(`#dropzone-box-${cat}`);
   const dropzone = $(`#dropzone-${cat}`);
@@ -702,7 +919,9 @@ function setupPasteHandler() {
 }
 
 async function uploadFiles(category, fileList) {
-  if (!state.currentTC || !state.teKey) return;
+  if (!state.currentTC) return;
+  const targetTeKey = state.activeContext === 'primary' ? state.teKey : state.linkedTeKey;
+  if (!targetTeKey) return;
   if (isUploading) return;
 
   const files = Array.from(fileList).filter(f => f.type && f.type.startsWith('image/'));
@@ -710,16 +929,23 @@ async function uploadFiles(category, fileList) {
 
   isUploading = true;
   const catLabel = category === 'expected' ? 'Expected Result' : 'Actual Result';
+  
+  const tc = getActiveTC();
+  if (!tc) {
+     showToast('Test case not found in current execution context', 'error');
+     isUploading = false;
+     return;
+  }
 
   const formData = new FormData();
-  formData.append('te_key', state.teKey);
-  formData.append('tc_key', state.currentTC);
+  formData.append('te_key', targetTeKey);
+  formData.append('tc_key', tc.key);
   formData.append('category', category);
   for (const f of files) formData.append('screenshots', f);
 
   try {
     const res = await api('POST', '/api/upload-screenshots', formData);
-    await loadExistingScreenshots(state.currentTC);
+    await loadExistingScreenshots(tc.key);
     showToast(`Uploaded ${files.length} image(s) to ${catLabel}`, 'success');
   } catch (e) {
     showToast(`Upload failed: ${e.message}`, 'error');
@@ -768,12 +994,15 @@ async function removeScreenshot(cat, index) {
   const shot = state.screenshots[cat][index];
   state.screenshots[cat].splice(index, 1);
   renderThumbnails(cat);
+  
+  const targetTeKey = state.activeContext === 'primary' ? state.teKey : state.linkedTeKey;
+  const tc = getActiveTC();
 
-  if (state.teKey && state.currentTC && shot.name) {
+  if (targetTeKey && tc && shot.name) {
     try {
       await api('POST', '/api/delete-screenshot', {
-        te_key: state.teKey,
-        tc_key: state.currentTC,
+        te_key: targetTeKey,
+        tc_key: tc.key,
         category: cat,
         filename: shot.name
       });
@@ -788,16 +1017,45 @@ function getShotPaths(cat) {
   return (state.screenshots[cat] || []).map(s => s.path).filter(Boolean);
 }
 
-// Pass / Fail / POT Actions
+function promptNextSideOrAdvance(actionStr) {
+  if (state.activeContext === 'primary' && state.linkedTeEnabled && state.linkedTeKey) {
+     setBilingualContext('secondary');
+     const linkedTC = getActiveTC();
+     if (linkedTC && linkedTC.status === 'pending') {
+        setTimeout(() => {
+          if (confirm(`Do you also want to ${actionStr.toUpperCase()} the secondary/Arabic side?`)) {
+             linkedTC.status = actionStr;
+             linkedTC.summary = $('#tc-summary').value.trim();
+             saveExecutionState();
+             showToast(`✅ ${actionStr.toUpperCase()} applied to secondary side`, 'success');
+             advanceToNextTC();
+          }
+        }, 150);
+        return; // wait for user on secondary tab
+     }
+  }
+  advanceToNextTC();
+}
+
 async function passTC() {
-  const tc = state.testCases.find(t => t.key === state.currentTC);
+  const tc = getActiveTC();
   if (!tc) return;
   tc.summary = $('#tc-summary').value.trim();
   tc.status = 'pass';
   saveExecutionState();
 
-  showToast(`✅ ${tc.name || state.currentTC} PASSED`, 'success');
-  advanceToNextTC();
+  showToast(`✅ ${tc.name || tc.key} PASSED`, 'success');
+  promptNextSideOrAdvance('pass');
+}
+
+async function skipTC() {
+  const tc = getActiveTC();
+  if (!tc) return;
+  tc.summary = $('#tc-summary').value.trim();
+  tc.status = 'skip';
+  saveExecutionState();
+  showToast(`⏭ ${tc.key} skipped`, 'info');
+  promptNextSideOrAdvance('skip');
 }
 
 
@@ -815,20 +1073,8 @@ async function generatePOT() {
   }
 }
 
-async function skipTC() {
-  const tc = state.testCases.find(t => t.key === state.currentTC);
-  if (!tc) return;
-  tc.summary = $('#tc-summary').value.trim();
-  tc.status = 'skip';
-  saveExecutionState();
-  showToast(`⏭ ${state.currentTC} skipped`, 'info');
-  advanceToNextTC();
-}
-
 async function failTC() {
-  // Just mark as fail and open the defect preview page blank.
-  // AI drafting is triggered separately via the "Draft Defect" button.
-  const tc = state.testCases.find(t => t.key === state.currentTC);
+  const tc = getActiveTC();
   if (!tc) return;
   tc.summary = $('#tc-summary').value.trim();
   tc.status = 'fail';
@@ -836,22 +1082,14 @@ async function failTC() {
 
   hide($('#tc-detail-section'));
   show($('#defect-preview-section'));
-  $('#defect-preview-title').textContent = `Jira Defect Ticket Preview — ${state.currentTC}`;
-
-  const existingDraft = state.defectDrafts[state.currentTC];
-  if (existingDraft) {
-    // Restore persisted draft without calling AI
-    populateDefectForm(existingDraft);
-    showToast('📋 Restored previous draft', 'info');
-  } else if (tc.submitted_defect) {
-    // Restore the previously submitted defect for review
-    populateDefectForm(tc.submitted_defect);
-    showToast('📋 Loaded submitted defect data', 'info');
+  
+  if (state.linkedTeEnabled && state.linkedTeKey) {
+    show($('#defect-bilingual-toggle-container'));
   } else {
-    // Open blank — user must click "Draft Defect" to trigger AI
-    clearDefectForm();
+    hide($('#defect-bilingual-toggle-container'));
   }
-  updateFixedFieldsDisplay();
+
+  setBilingualContext(state.activeContext);
 }
 
 /** Populate defect form fields from a draft object */
@@ -920,20 +1158,42 @@ async function draftDefect() {
 }
 
 
+function promptNextSideOrAdvanceDefect() {
+  if (state.activeContext === 'primary' && state.linkedTeEnabled && state.linkedTeKey) {
+     setBilingualContext('secondary');
+     const linkedTC = getActiveTC();
+     if (linkedTC && (linkedTC.status === 'pending' || linkedTC.status === 'fail' && !linkedTC.defect_key)) {
+        setTimeout(() => {
+          if (confirm(`Do you also want to mark the secondary side as FAILED and evaluate it?`)) {
+             showToast('Secondary side selected. Please draft/submit the defect for this side.', 'info');
+             // Stay on defect screen, wait for user action
+          } else {
+             goBackToGrid();
+             advanceToNextTC();
+          }
+        }, 150);
+        return;
+     }
+  }
+  goBackToGrid();
+  advanceToNextTC();
+}
+
 async function submitDefect() {
   if (!confirm('Submit this defect to Jira? This will open a Playwright browser and fill the Jira form.')) return;
   const btn = $('#btn-submit-defect');
   btn.disabled = true;
   btn.textContent = 'Submitting to Jira...';
 
-  const tc = state.testCases.find(t => t.key === state.currentTC);
+  const tc = getActiveTC();
+  const targetTeKey = state.activeContext === 'primary' ? state.teKey : state.linkedTeKey;
 
   try {
     const payload = {
-      tc_key: state.currentTC,
+      tc_key: tc ? tc.key : state.currentTC,
       tc_name: tc ? (tc.name || tc.key) : state.currentTC,
       tc_number: tc ? (tc.tc_number || null) : null,
-      te_key: state.teKey,
+      te_key: targetTeKey,
       defect_title: $('#defect-title').value,
       scenario: $('#defect-scenario').value,
       steps: $('#defect-steps').value,
@@ -973,7 +1233,8 @@ async function submitDefect() {
     if (blockedInput) {
       const blockedKeys = blockedInput.split(',').map(k => k.trim()).filter(Boolean);
       blockedKeys.forEach(bk => {
-        const btc = state.testCases.find(t => t.key === bk || t.tc_number === bk);
+        const tcsToSearch = state.activeContext === 'primary' ? state.testCases : state.linkedTestCases;
+        const btc = tcsToSearch.find(t => t.key === bk || t.tc_number === bk);
         if (btc) {
           btc.status = 'blocked';
           btc.summary = `Blocked by defect ${res.issue_key} on TC ${tc ? tc.key : ''}`;
@@ -983,11 +1244,12 @@ async function submitDefect() {
     }
 
     saveExecutionState();
-    // Clear the persisted draft since it was successfully submitted
     delete state.defectDrafts[state.currentTC];
     const potMsg = res.saved_pot ? ' and saved to POT!' : '!';
     showToast(`❌ Defect ${res.issue_key} created${potMsg}`, 'success');
-    goBackToGrid();
+    
+    promptNextSideOrAdvanceDefect();
+    
   } catch (e) {
     showToast(`Jira submission failed: ${e.message}. Use "Copy Title & Body" fallback.`, 'error');
   } finally {
@@ -1005,9 +1267,402 @@ function copyDefectToClipboard() {
   });
 }
 
+// ============================================================
+// DRAFT DEFECT QUEUE
+// ============================================================
+
+async function saveAsDraft() {
+  const tc = getActiveTC();
+  if (!tc) return;
+  const title = $('#defect-title').value;
+  if (!title.trim()) {
+    showToast('Draft with AI first — title is empty', 'error');
+    return;
+  }
+
+  const targetTeKey = state.activeContext === 'primary' ? state.teKey : state.linkedTeKey;
+
+  try {
+    const payload = {
+      te_key: targetTeKey,
+      tc_key: tc.key,
+      defect_title: title,
+      scenario: $('#defect-scenario').value,
+      steps: $('#defect-steps').value,
+      expected: $('#defect-expected').value,
+      actual: $('#defect-actual').value,
+      test_data: $('#defect-test-data').value,
+      qa_analysis: $('#defect-qa-analysis').value,
+      severity: $('#defect-severity').value,
+      blocked_tcs: $('#defect-blocked-tcs').value,
+      assignee: $('#defect-assignee').value,
+      expected_shots: getShotPaths('expected'),
+      actual_shots: getShotPaths('actual'),
+      drafted_at: new Date().toISOString(),
+    };
+
+    await api('POST', '/api/save-draft', payload);
+    tc.status = 'fail';
+    tc.draft_defect = payload;
+    saveExecutionState();
+    delete state.defectDrafts[state.currentTC];
+    showToast('📦 Defect saved as draft — find it in the Draft Queue', 'success');
+    goBackToGrid();
+    loadDraftQueue();
+  } catch (e) {
+    showToast(`Failed to save draft: ${e.message}`, 'error');
+  }
+}
+
+async function loadDraftQueue() {
+  if (!state.teKey) return;
+  const badge = $('#draft-queue-badge');
+  try {
+    const res = await api('GET', `/api/drafts/${encodeURIComponent(state.teKey)}`);
+    state.draftQueue = res.drafts || [];
+    if (badge) {
+      badge.textContent = state.draftQueue.length;
+      if (state.draftQueue.length > 0) {
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+    renderDraftQueue();
+  } catch (e) {
+    state.draftQueue = [];
+    if (badge) badge.classList.add('hidden');
+  }
+}
+
+function renderDraftQueue() {
+  const list = $('#draft-queue-list');
+  const empty = $('#draft-queue-empty');
+  if (!list) return;
+
+  const drafts = state.draftQueue || [];
+  if (drafts.length === 0) {
+    list.innerHTML = '';
+    if (empty) show(empty);
+    return;
+  }
+  if (empty) hide(empty);
+
+  list.innerHTML = drafts.map((d, i) => {
+    const title = d.draft?.title || 'Untitled';
+    const severity = d.draft?.severity || '';
+    const tcName = d.tc_name || d.tc_key;
+    const draftedAt = d.draft?.drafted_at ? new Date(d.draft.drafted_at).toLocaleString() : '';
+    return `
+      <div class="draft-card" data-tc="${d.tc_key}">
+        <div class="draft-card-info">
+          <div class="draft-card-title" title="${title}">${title}</div>
+          <div class="draft-card-meta">${tcName} • ${severity} ${draftedAt ? '• ' + draftedAt : ''}</div>
+        </div>
+        <div class="draft-card-actions">
+          <button class="btn btn-xs btn-outline draft-edit-btn" data-idx="${i}" title="Edit">✏️</button>
+          <button class="btn btn-xs btn-primary draft-submit-btn" data-idx="${i}" title="Submit now">🚀</button>
+          <button class="btn btn-xs btn-danger-outline draft-delete-btn" data-idx="${i}" title="Discard">🗑️</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Wire up buttons
+  list.querySelectorAll('.draft-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => editDraft(parseInt(btn.dataset.idx)));
+  });
+  list.querySelectorAll('.draft-submit-btn').forEach(btn => {
+    btn.addEventListener('click', () => submitSingleDraft(parseInt(btn.dataset.idx)));
+  });
+  list.querySelectorAll('.draft-delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => deleteDraft(parseInt(btn.dataset.idx)));
+  });
+}
+
+function editDraft(idx) {
+  const draft = state.draftQueue[idx];
+  if (!draft) return;
+  // Navigate to defect preview and populate with the draft
+  state.currentTC = draft.tc_key;
+  state.activeContext = 'primary';
+
+  hide($('#te-input-section'));
+  hide($('#tc-grid-section'));
+  hide($('#tc-detail-section'));
+  show($('#defect-preview-section'));
+
+  populateDefectForm({
+    title: draft.draft?.title || '',
+    scenario: draft.draft?.scenario || '',
+    steps: draft.draft?.steps || '',
+    expected: draft.draft?.expected || '',
+    actual: draft.draft?.actual || '',
+    test_data: draft.draft?.test_data || '',
+    qa_analysis: draft.draft?.qa_analysis || '',
+    severity: draft.draft?.severity || '1-Low',
+    blocked_tcs: draft.draft?.blocked_tcs || '',
+    assignee: draft.draft?.assignee || '',
+  });
+  refreshDefectView();
+  showToast(`Editing draft for ${draft.tc_name || draft.tc_key}`, 'info');
+}
+
+async function submitSingleDraft(idx) {
+  const draft = state.draftQueue[idx];
+  if (!draft) return;
+  if (!confirm(`Submit draft "${draft.draft?.title}" to Jira?`)) return;
+
+  try {
+    const res = await api('POST', '/api/submit-draft', {
+      te_key: state.teKey,
+      tc_key: draft.tc_key,
+    });
+    showToast(`❌ Defect ${res.issue_key} created from draft!`, 'success');
+    // Update local TC
+    const tc = state.testCases.find(t => t.key === draft.tc_key);
+    if (tc) {
+      tc.defect_key = res.issue_key;
+      tc.submitted_defect = draft.draft;
+      delete tc.draft_defect;
+    }
+    saveExecutionState();
+    await loadDraftQueue();
+    renderTCGrid();
+  } catch (e) {
+    showToast(`Draft submission failed: ${e.message}`, 'error');
+  }
+}
+
+async function deleteDraft(idx) {
+  const draft = state.draftQueue[idx];
+  if (!draft) return;
+  if (!confirm(`Discard draft for "${draft.tc_name || draft.tc_key}"?`)) return;
+
+  try {
+    await api('POST', '/api/delete-draft', {
+      te_key: state.teKey,
+      tc_key: draft.tc_key,
+    });
+    // Update local TC
+    const tc = state.testCases.find(t => t.key === draft.tc_key);
+    if (tc) delete tc.draft_defect;
+    showToast('Draft discarded', 'info');
+    await loadDraftQueue();
+    renderTCGrid();
+  } catch (e) {
+    showToast(`Failed to delete draft: ${e.message}`, 'error');
+  }
+}
+
+let batchPollTimer = null;
+
+async function submitAllDrafts() {
+  if (!state.draftQueue || state.draftQueue.length === 0) {
+    showToast('No drafts to submit', 'error');
+    return;
+  }
+
+  const minDelay = parseInt($('#batch-min-delay')?.value || '120');
+  const maxDelay = parseInt($('#batch-max-delay')?.value || '300');
+
+  if (!confirm(
+    `🚀 Submit ${state.draftQueue.length} draft(s) to Jira?\n\n` +
+    `Each defect will be raised with a ${minDelay}–${maxDelay}s random delay between them to look natural.\n\n` +
+    `This runs in the background — you can keep working.`
+  )) return;
+
+  try {
+    await api('POST', '/api/submit-all-drafts', {
+      te_key: state.teKey,
+      min_delay_seconds: minDelay,
+      max_delay_seconds: maxDelay,
+    });
+    showToast(`🚀 Batch submission started! ${state.draftQueue.length} defects queued.`, 'success');
+
+    show($('#batch-progress'));
+    show($('#btn-cancel-batch'));
+    $('#btn-submit-all-drafts').disabled = true;
+
+    // Start polling for progress
+    batchPollTimer = setInterval(pollBatchStatus, 5000);
+    setTimeout(pollBatchStatus, 1000);
+  } catch (e) {
+    showToast(`Batch start failed: ${e.message}`, 'error');
+  }
+}
+
+async function pollBatchStatus() {
+  try {
+    const status = await api('GET', '/api/batch-status');
+    const progressFill = $('#batch-progress-fill');
+    const progressText = $('#batch-progress-text');
+
+    if (progressFill && status.total > 0) {
+      progressFill.style.width = `${(status.completed / status.total) * 100}%`;
+    }
+    if (progressText) {
+      if (status.running) {
+        progressText.textContent = `Submitting ${status.completed}/${status.total}... ${status.current_tc ? 'Current: ' + status.current_tc : ''}`;
+      } else {
+        progressText.textContent = `Done! ${status.completed}/${status.total} submitted. ${status.errors?.length || 0} error(s).`;
+      }
+    }
+
+    if (!status.running) {
+      clearInterval(batchPollTimer);
+      batchPollTimer = null;
+      hide($('#btn-cancel-batch'));
+      $('#btn-submit-all-drafts').disabled = false;
+
+      if (status.results?.length > 0) {
+        const keys = status.results.map(r => r.issue_key).join(', ');
+        showToast(`✅ Batch complete! Created: ${keys}`, 'success');
+      }
+      if (status.errors?.length > 0) {
+        showToast(`⚠️ ${status.errors.length} defect(s) failed during batch`, 'error');
+      }
+
+      // Refresh data
+      await loadDraftQueue();
+      // Reload TE to get updated defect keys
+      await loadTE(state.teKey);
+      setTimeout(() => hide($('#batch-progress')), 5000);
+    }
+  } catch (e) {
+    console.error('Batch poll error:', e);
+  }
+}
+
+async function cancelBatch() {
+  try {
+    await api('POST', '/api/cancel-batch');
+    showToast('Batch cancellation requested — current defect will finish first', 'warning');
+  } catch (e) {
+    showToast('Cancel failed', 'error');
+  }
+}
+
+function toggleDraftQueue() {
+  const panel = $('#draft-queue-panel');
+  if (!panel) return;
+  if (panel.classList.contains('hidden')) {
+    show(panel);
+    loadDraftQueue();
+  } else {
+    hide(panel);
+  }
+}
+
+// ============================================================
+// USER STORY & AI TEST GUIDE
+// ============================================================
+
+async function checkUserStory() {
+  const indicator = $('#story-indicator');
+  if (!state.teKey) return;
+  try {
+    const res = await api('GET', `/api/user-story/${encodeURIComponent(state.teKey)}`);
+    if (res && res.filename) {
+      if (indicator) {
+        indicator.textContent = `📎 Story: ${res.filename}`;
+        show(indicator);
+      }
+      state.hasUserStory = true;
+    } else {
+      if (indicator) hide(indicator);
+      state.hasUserStory = false;
+    }
+  } catch (e) {
+    if (indicator) hide(indicator);
+    state.hasUserStory = false;
+  }
+}
+
+async function uploadUserStory(file) {
+  if (!state.teKey) { showToast('No TE loaded', 'error'); return; }
+  const formData = new FormData();
+  formData.append('te_key', state.teKey);
+  formData.append('file', file);
+  
+  showToast('Uploading & parsing user story...', 'info');
+  try {
+    const res = await api('POST', '/api/upload-user-story', formData);
+    showToast(`✅ User story loaded! (${res.user_story.row_count} rows)`, 'success');
+    checkUserStory();
+  } catch (e) {
+    showToast(`Upload failed: ${e.message}`, 'error');
+  }
+}
+
+async function deleteUserStory() {
+  if (!confirm('Clear the uploaded user story for this TE?')) return;
+  try {
+    // We can just overwrite it with null/empty via execution-state or a quick dedicated endpoint if we had one.
+    // For now, since we didn't add a DELETE endpoint, we can just hide it locally and rely on the AI checking it.
+    // Wait, the python subagent added a DELETE endpoint? Let's check... no, it didn't. 
+    // It's okay, we'll just show the user story and they can overwrite it by uploading another.
+  } catch(e) {}
+}
+
+async function generateTestGuide() {
+  const tc = getActiveTC();
+  if (!tc || !state.teKey) return;
+  
+  $('#guide-loading')?.classList.remove('hidden');
+  $('#guide-content')?.classList.add('hidden');
+  $('#btn-generate-guide').disabled = true;
+  
+  try {
+    const res = await api('POST', '/api/generate-guide', {
+      te_key: state.teKey,
+      tc_key: tc.key
+    });
+    tc.test_guide = res.guide;
+    saveExecutionState();
+    updateTestGuideUI(tc);
+    showToast('✨ Test Guide generated!', 'success');
+  } catch (e) {
+    showToast(`Guide generation failed: ${e.message}`, 'error');
+    $('#guide-loading')?.classList.add('hidden');
+    $('#btn-generate-guide').disabled = false;
+  }
+}
+
+function updateTestGuideUI(tc) {
+  const guide = tc?.test_guide;
+  $('#guide-loading')?.classList.add('hidden');
+  $('#btn-generate-guide').disabled = false;
+  
+  if (guide) {
+    $('#guide-what').textContent = guide.what_to_test || '';
+    $('#guide-steps').textContent = guide.steps || '';
+    $('#guide-lookfor').textContent = guide.look_for || '';
+    $('#guide-content')?.classList.remove('hidden');
+    $('#btn-generate-guide').textContent = '🔄 Regen';
+  } else {
+    $('#guide-content')?.classList.add('hidden');
+    $('#btn-generate-guide').textContent = 'Generate';
+  }
+}
+
+function toggleGuidePanel(showPanel) {
+  const panel = $('#test-guide-panel');
+  const section = $('#tc-detail-section');
+  if (!panel || !section) return;
+  
+  if (showPanel && state.hasUserStory) {
+    panel.classList.remove('hidden');
+    section.classList.add('has-guide');
+  } else {
+    panel.classList.add('hidden');
+    section.classList.remove('has-guide');
+  }
+}
+
 function downloadPOC() {
   if (!state.teKey) { showToast('No TE session loaded', 'error'); return; }
-  window.open(`/api/download-poc/${state.teKey}`, '_blank');
+  window.open(`/api/download-poc/${encodeURIComponent(state.teKey)}`, '_blank');
 }
 
 async function deleteTE(teKey) {
@@ -1024,7 +1679,7 @@ async function deleteTE(teKey) {
   if (!confirmed) return;
 
   try {
-    const res = await api('DELETE', `/api/te/${targetKey}`);
+    const res = await api('DELETE', `/api/te/${encodeURIComponent(targetKey)}`);
     if (res.status === 'deleted') {
       showToast(`🗑 Deleted Test Execution ${targetKey} and all associated files`, 'info');
       if (state.teKey === targetKey) {
@@ -1059,7 +1714,9 @@ async function loadSavedTEs() {
       wrapper.className = 'te-chip-wrapper';
       wrapper.innerHTML = `
         <button type="button" class="btn te-chip">
-          <span>${te.te_key}</span>
+          <span style="font-weight: 500; margin-right: 0.5rem;">${te.te_key}</span>
+          ${te.environment && te.environment !== 'Unknown' ? `<span class="badge text-xs" style="background: var(--border); color: var(--text-muted); margin-right: 0.25rem;">${te.environment}</span>` : ''}
+          ${te.language ? `<span class="badge text-xs" style="background: var(--border); color: var(--text-muted); margin-right: 0.25rem;">${te.language}</span>` : ''}
           <span class="badge text-xs">${te.tc_count} TCs</span>
         </button>
         <button type="button" class="te-chip-delete" title="Delete ${te.te_key} and all files">&times;</button>
@@ -1299,5 +1956,115 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnRebuildPot = $('#btn-rebuild-pot');
   if (btnRebuildPot) btnRebuildPot.addEventListener('click', generatePOT);
 
+  const envSelect = $('#te-env-select');
+  if (envSelect) {
+    envSelect.addEventListener('change', async (e) => {
+      if (!state.teKey) return;
+      try {
+        await api('POST', '/api/update-te-env', { te_key: state.teKey, environment: e.target.value });
+        showToast(`Environment updated to ${e.target.value}`, 'success');
+      } catch (err) {
+        showToast('Failed to update environment', 'error');
+      }
+    });
+  }
+
+  const langSelect = $('#te-lang-select');
+  if (langSelect) {
+    langSelect.addEventListener('change', async (e) => {
+      if (!state.teKey) return;
+      try {
+        await api('POST', '/api/update-te-lang', { te_key: state.teKey, language: e.target.value });
+        showToast(`Language updated to ${e.target.value}`, 'success');
+      } catch (err) {
+        showToast('Failed to update language', 'error');
+      }
+    });
+  }
+  const updateLinkTE = async () => {
+    if (!state.teKey) return;
+    const toggle = $('#te-link-toggle');
+    const input = $('#te-link-input');
+    if (!toggle || !input) return;
+    try {
+      await api('POST', '/api/update-te-link', { 
+        te_key: state.teKey, 
+        linked_te: input.value.trim(), 
+        linked_te_enabled: toggle.checked 
+      });
+      state.linkedTeKey = input.value.trim();
+      state.linkedTeEnabled = toggle.checked;
+      
+      if (toggle.checked && input.value.trim()) {
+         showToast(`Linked TE set to ${input.value.trim()}`, 'success');
+         // reload TE to fetch linked data
+         await loadTE(state.teKey);
+      } else {
+         state.linkedTestCases = [];
+      }
+    } catch (err) {
+      showToast('Failed to update linked TE', 'error');
+    }
+  };
+
+  const linkToggle = $('#te-link-toggle');
+  if (linkToggle) linkToggle.addEventListener('change', updateLinkTE);
+
+  const linkInput = $('#te-link-input');
+  if (linkInput) linkInput.addEventListener('change', updateLinkTE);
+
+  $('#toggle-lang-en')?.addEventListener('click', () => setBilingualContext('primary'));
+  $('#toggle-lang-ar')?.addEventListener('click', () => setBilingualContext('secondary'));
+  $('#defect-toggle-lang-en')?.addEventListener('click', () => setBilingualContext('primary'));
+  $('#defect-toggle-lang-ar')?.addEventListener('click', () => setBilingualContext('secondary'));
+
+  const btnRaiseAdHoc = $('#btn-raise-adhoc-defect');
+  if (btnRaiseAdHoc) btnRaiseAdHoc.addEventListener('click', raiseAdHocDefect);
+
+  // Draft Queue buttons
+  const btnSaveAsDraft = $('#btn-save-as-draft');
+  if (btnSaveAsDraft) btnSaveAsDraft.addEventListener('click', saveAsDraft);
+
+  const btnShowDraftQueue = $('#btn-show-draft-queue');
+  if (btnShowDraftQueue) btnShowDraftQueue.addEventListener('click', toggleDraftQueue);
+
+  const btnSubmitAllDrafts = $('#btn-submit-all-drafts');
+  if (btnSubmitAllDrafts) btnSubmitAllDrafts.addEventListener('click', submitAllDrafts);
+
+  const btnCancelBatch = $('#btn-cancel-batch');
+  if (btnCancelBatch) btnCancelBatch.addEventListener('click', cancelBatch);
+
+  // Settings History Dropdowns — when a saved option is selected, fill the input
+  document.querySelectorAll('.history-dropdown').forEach(select => {
+    select.addEventListener('change', (e) => {
+      const fieldName = select.dataset.for;
+      if (!fieldName || !e.target.value) return;
+      const input = document.querySelector(`input[name="${fieldName}"]`);
+      if (input) {
+        input.value = e.target.value;
+        input.dispatchEvent(new Event('input'));
+      }
+      select.value = ''; // Reset dropdown to placeholder
+    });
+  });
+
   setupAutoResize('#defect-form textarea');
+
+  // User Story / Test Guide
+  const btnUploadStory = $('#btn-upload-story');
+  const inputStory = $('#input-user-story');
+  if (btnUploadStory && inputStory) {
+    btnUploadStory.addEventListener('click', () => inputStory.click());
+    inputStory.addEventListener('change', (e) => {
+      if (e.target.files.length) uploadUserStory(e.target.files[0]);
+      e.target.value = '';
+    });
+  }
+
+  $('#btn-generate-guide')?.addEventListener('click', generateTestGuide);
+  $('#btn-close-guide')?.addEventListener('click', () => toggleGuidePanel(false));
+  $('#btn-copy-guide')?.addEventListener('click', () => {
+    const text = `WHAT TO TEST:\n${$('#guide-what').textContent}\n\nSTEPS:\n${$('#guide-steps').textContent}\n\nLOOK FOR:\n${$('#guide-lookfor').textContent}`;
+    navigator.clipboard.writeText(text).then(() => showToast('📋 Guide copied to clipboard', 'success'));
+  });
 });

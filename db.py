@@ -13,7 +13,7 @@ from datetime import datetime
 import config
 
 DB_FILE = os.path.abspath("db.json")
-_db_lock = threading.Lock()
+_db_lock = threading.RLock()
 
 def _default_db_structure():
     return {
@@ -70,7 +70,7 @@ def get_te(te_key: str) -> dict:
     tes = db.get("test_executions", {})
     return tes.get(te_key, {"te_key": te_key, "test_cases": []})
 
-def save_te(te_key: str, test_cases: list):
+def save_te(te_key: str, test_cases: list, environment: str = None, language: str = None, linked_te: str = None, linked_te_enabled: bool = None, user_story: dict = None):
     """Saves or updates a Test Execution and its Test Cases in db.json."""
     with _db_lock:
         db = _read_db_unlocked()
@@ -80,11 +80,23 @@ def save_te(te_key: str, test_cases: list):
         tes = db["test_executions"]
         existing = tes.get(te_key, {})
         
+        import config
+        env = environment or existing.get("environment") or config.get("environment", "Unknown")
+        lang = language or existing.get("language") or "English"
+        l_te = linked_te if linked_te is not None else existing.get("linked_te", "")
+        l_enabled = linked_te_enabled if linked_te_enabled is not None else existing.get("linked_te_enabled", False)
+        us = user_story if user_story is not None else existing.get("user_story")
+
         tes[te_key] = {
             "te_key": te_key,
             "created_at": existing.get("created_at", datetime.now().isoformat()),
             "updated_at": datetime.now().isoformat(),
             "tc_count": len(test_cases),
+            "environment": env,
+            "language": lang,
+            "linked_te": l_te,
+            "linked_te_enabled": l_enabled,
+            "user_story": us,
             "test_cases": test_cases
         }
         
@@ -97,7 +109,7 @@ def save_te(te_key: str, test_cases: list):
         os.makedirs(te_dir, exist_ok=True)
         state_file = os.path.join(te_dir, "state.json")
         with open(state_file, "w", encoding="utf-8") as f:
-            json.dump({"test_cases": test_cases}, f, indent=2)
+            json.dump({"test_cases": test_cases, "environment": env, "language": lang, "linked_te": l_te, "linked_te_enabled": l_enabled, "user_story": us}, f, indent=2)
     except Exception as e:
         print(f"[!] Warning syncing state file: {e}")
 
@@ -118,7 +130,9 @@ def get_all_tes() -> list:
             "tc_count": len(tcs),
             "pass_count": sum(1 for tc in tcs if tc.get("status") == "pass"),
             "fail_count": sum(1 for tc in tcs if tc.get("status") == "fail"),
-            "pending_count": sum(1 for tc in tcs if tc.get("status") == "pending")
+            "pending_count": sum(1 for tc in tcs if tc.get("status") == "pending"),
+            "environment": data.get("environment", "Unknown"),
+            "language": data.get("language", "English")
         })
     return sorted(result, key=lambda x: x.get("updated_at", ""), reverse=True)
 

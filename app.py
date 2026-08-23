@@ -4,6 +4,7 @@ import time
 import threading
 from flask import Flask, request, jsonify, send_file, send_from_directory, render_template
 from pathlib import Path
+from datetime import datetime
 
 import config
 import jira_actions
@@ -13,6 +14,13 @@ import db
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB upload limit
+
+import re
+def get_tc_dir(te_key, tc_key):
+    """Returns a safe, truncated path for a TC folder to avoid Windows MAX_PATH errors."""
+    safe_tc = re.sub(r'[\\/*?:"<>|]', "_", tc_key)
+    safe_tc = safe_tc[:100].strip()
+    return os.path.join(os.path.abspath(config.EXECUTIONS_DIR), te_key, safe_tc)
 
 @app.after_request
 def add_cors_headers(response):
@@ -65,7 +73,7 @@ def api_upload_screenshots():
     if not te_key or not tc_key:
         return jsonify({"error": "Missing te_key or tc_key"}), 400
 
-    save_dir = os.path.join(os.path.abspath(config.EXECUTIONS_DIR), te_key, tc_key, category)
+    save_dir = os.path.join(get_tc_dir(te_key, tc_key), category)
     if not os.path.realpath(save_dir).startswith(os.path.realpath(config.EXECUTIONS_DIR)):
         return jsonify({"error": "Invalid path"}), 400
     os.makedirs(save_dir, exist_ok=True)
@@ -78,18 +86,19 @@ def api_upload_screenshots():
             filename = f"shot_{timestamp}_{i}{ext}"
             filepath = os.path.join(save_dir, filename)
             file.save(filepath)
+            import urllib.parse
             saved_files.append({
                 "name": filename,
                 "path": os.path.abspath(filepath),
-                "url": f"/api/screenshot-file/{te_key}/{tc_key}/{category}/{filename}",
+                "url": f"/api/screenshot-file/{urllib.parse.quote(te_key)}/{urllib.parse.quote(tc_key)}/{category}/{urllib.parse.quote(filename)}",
                 "category": category
             })
 
     return jsonify({"files": saved_files})
 
-@app.route('/api/screenshots/<te_key>/<tc_key>', methods=['GET'])
+@app.route('/api/screenshots/<te_key>/<path:tc_key>', methods=['GET'])
 def api_get_screenshots(te_key, tc_key):
-    tc_dir = os.path.join(os.path.abspath(config.EXECUTIONS_DIR), te_key, tc_key)
+    tc_dir = get_tc_dir(te_key, tc_key)
     if not os.path.realpath(tc_dir).startswith(os.path.realpath(config.EXECUTIONS_DIR)):
         return jsonify({"error": "Invalid path"}), 400
     result = {"expected": [], "actual": []}
@@ -98,19 +107,23 @@ def api_get_screenshots(te_key, tc_key):
         cat_dir = os.path.join(tc_dir, cat)
         if os.path.exists(cat_dir):
             filenames = [f for f in os.listdir(cat_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))]
+            import urllib.parse
             for f in sorted(filenames):
+                tc_key_encoded = urllib.parse.quote(tc_key, safe='')
+                te_key_encoded = urllib.parse.quote(te_key, safe='')
+                f_encoded = urllib.parse.quote(f, safe='')
                 result[cat].append({
                     "name": f,
-                    "url": f"/api/screenshot-file/{te_key}/{tc_key}/{cat}/{f}",
+                    "url": f"/api/screenshot-file/{te_key_encoded}/{tc_key_encoded}/{cat}/{f_encoded}",
                     "path": os.path.abspath(os.path.join(cat_dir, f)),
                     "category": cat
                 })
 
     return jsonify(result)
 
-@app.route('/api/screenshot-file/<te_key>/<tc_key>/<category>/<filename>', methods=['GET'])
+@app.route('/api/screenshot-file/<te_key>/<path:tc_key>/<category>/<filename>', methods=['GET'])
 def api_screenshot_file(te_key, tc_key, category, filename):
-    save_dir = os.path.join(os.path.abspath(config.EXECUTIONS_DIR), te_key, tc_key, category)
+    save_dir = os.path.join(get_tc_dir(te_key, tc_key), category)
     filepath = os.path.join(save_dir, filename)
     if not os.path.realpath(filepath).startswith(os.path.realpath(save_dir)):
         return jsonify({"error": "Invalid path"}), 400
@@ -128,7 +141,7 @@ def api_delete_screenshot():
         if not te_key or not tc_key or not category or not filename:
             return jsonify({"error": "Missing parameters"}), 400
 
-        save_dir = os.path.join(os.path.abspath(config.EXECUTIONS_DIR), te_key, tc_key, category)
+        save_dir = os.path.join(get_tc_dir(te_key, tc_key), category)
         filepath = os.path.abspath(os.path.join(save_dir, os.path.basename(filename)))
 
         if filepath.startswith(save_dir) and os.path.exists(filepath):
@@ -164,12 +177,10 @@ def api_generate_defect():
             actual_shots=actual_shots,
         )
 
-        ai_error = None
         if isinstance(title_res, dict) and "error" in title_res:
             ai_error = title_res["error"]
             print(f"[!] AI Title error: {ai_error}")
-            prefix = config.get("defect_title_prefix", "LightMode_SIT_Android_")
-            title = f"{prefix}{notes[:60]}"
+            return jsonify({"error": ai_error}), 500
         else:
             title = title_res
 
@@ -183,7 +194,7 @@ def api_generate_defect():
         if isinstance(sections, dict) and "error" in sections:
             ai_error = sections["error"]
             print(f"[!] AI Sections error: {ai_error}")
-            sections = {}
+            return jsonify({"error": ai_error}), 500
 
         return jsonify({
             "title": title,
@@ -191,8 +202,7 @@ def api_generate_defect():
             "steps": sections.get("steps") or "1. Open app\n2. Perform steps",
             "expected": sections.get("expected") or "Title and layout should match Figma designs",
             "actual": sections.get("actual") or notes,
-            "raw": sections.get("raw", ""),
-            "ai_error": ai_error
+            "raw": sections.get("raw", "")
         })
     except Exception as e:
         print(f"[!] API Generate Defect error: {e}")
@@ -310,22 +320,69 @@ def api_rebuild_pot():
 
         te_data = db.get_te(te_key)
         test_cases = te_data.get('test_cases', [])
+        primary_lang = te_data.get('language', 'English')
+        
+        def populate_shots(target_te, tcs, lang_label):
+            populated = []
+            for tc in tcs:
+                # Create a copy so we don't mutate DB state in memory
+                tc_copy = dict(tc)
+                tc_copy['name'] = f"[{lang_label[:2].upper()}] {tc_copy.get('name', '')}"
+                
+                tc_key = tc.get('key', '') or tc.get('name', '')
+                tc_dir = get_tc_dir(target_te, tc_key)
+                tc_copy['expected_shots'] = []
+                tc_copy['actual_shots'] = []
+                for cat in ['expected', 'actual']:
+                    cat_dir = os.path.join(tc_dir, cat)
+                    if os.path.exists(cat_dir):
+                        for f in sorted(os.listdir(cat_dir)):
+                            if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+                                tc_copy[f'{cat}_shots'].append(os.path.abspath(os.path.join(cat_dir, f)))
+                populated.append(tc_copy)
+            return populated
 
-        # Gather screenshot paths for each TC
-        for tc in test_cases:
-            tc_key = tc.get('key', '') or tc.get('name', '')
-            tc_dir = os.path.join(os.path.abspath(config.EXECUTIONS_DIR), te_key, tc_key)
-            tc['expected_shots'] = []
-            tc['actual_shots'] = []
-            for cat in ['expected', 'actual']:
-                cat_dir = os.path.join(tc_dir, cat)
-                if os.path.exists(cat_dir):
-                    for f in sorted(os.listdir(cat_dir)):
-                        if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
-                            tc[f'{cat}_shots'].append(os.path.abspath(os.path.join(cat_dir, f)))
+        combined_tcs = populate_shots(te_key, test_cases, primary_lang)
+        
+        linked_te = te_data.get('linked_te')
+        if te_data.get('linked_te_enabled') and linked_te:
+            linked_te_data = db.get_te(linked_te)
+            linked_test_cases = linked_te_data.get('test_cases', [])
+            linked_lang = linked_te_data.get('language', 'Arabic')
+            
+            linked_populated = populate_shots(linked_te, linked_test_cases, linked_lang)
+            
+            # Interleave them by tc_number so EN/AR for the same TC are grouped together
+            # First, group by tc_number or key
+            groups = {}
+            for tc in combined_tcs:
+                match_key = tc.get('tc_number') or tc.get('key') or tc.get('name')
+                groups[match_key] = [tc]
+                
+            for ltc in linked_populated:
+                match_key = ltc.get('tc_number') or ltc.get('key') or ltc.get('name')
+                # Try finding matching group by original key without language tag
+                original_key = ltc.get('key', '')
+                
+                found_group_key = match_key
+                if original_key and original_key not in groups:
+                    # check if there is a primary TC with matching original_key
+                    for k, v in groups.items():
+                        if any(ptc.get('key') == original_key for ptc in v):
+                            found_group_key = k
+                            break
+                
+                if found_group_key in groups:
+                    groups[found_group_key].append(ltc)
+                else:
+                    groups[found_group_key] = [ltc]
+            
+            combined_tcs = []
+            for k in groups:
+                combined_tcs.extend(groups[k])
 
-        doc_path = poc_doc.rebuild_pot(te_key, test_cases)
-        return jsonify({"status": "success", "doc_path": doc_path, "tc_count": len(test_cases)})
+        doc_path = poc_doc.rebuild_pot(te_key, combined_tcs)
+        return jsonify({"status": "success", "doc_path": doc_path, "tc_count": len(combined_tcs)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -427,12 +484,65 @@ def api_execution_state(te_key):
     try:
         if request.method == 'GET':
             te_data = db.get_te(te_key)
-            return jsonify({"test_cases": te_data.get("test_cases", [])})
+            return jsonify({
+                "test_cases": te_data.get("test_cases", []),
+                "environment": te_data.get("environment", "Unknown"),
+                "language": te_data.get("language", "English"),
+                "linked_te": te_data.get("linked_te", ""),
+                "linked_te_enabled": te_data.get("linked_te_enabled", False)
+            })
 
         data = request.json or {}
         test_cases = data.get("test_cases", [])
         db.save_te(te_key, test_cases)
         return jsonify({"status": "saved"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/update-te-env', methods=['POST'])
+def api_update_te_env():
+    try:
+        data = request.json or {}
+        te_key = data.get("te_key")
+        env = data.get("environment")
+        if not te_key or not env:
+            return jsonify({"error": "Missing te_key or environment"}), 400
+        
+        te_data = db.get_te(te_key)
+        db.save_te(te_key, te_data.get("test_cases", []), environment=env)
+        return jsonify({"status": "success", "environment": env})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/update-te-lang', methods=['POST'])
+def api_update_te_lang():
+    try:
+        data = request.json or {}
+        te_key = data.get("te_key")
+        lang = data.get("language")
+        if not te_key or not lang:
+            return jsonify({"error": "Missing te_key or language"}), 400
+        
+        te_data = db.get_te(te_key)
+        db.save_te(te_key, te_data.get("test_cases", []), language=lang)
+        return jsonify({"status": "success", "language": lang})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/update-te-link', methods=['POST'])
+def api_update_te_link():
+    try:
+        data = request.json or {}
+        te_key = data.get("te_key")
+        linked_te = data.get("linked_te")
+        linked_te_enabled = data.get("linked_te_enabled")
+        if not te_key:
+            return jsonify({"error": "Missing te_key"}), 400
+        
+        te_data = db.get_te(te_key)
+        db.save_te(te_key, te_data.get("test_cases", []), linked_te=linked_te, linked_te_enabled=linked_te_enabled)
+        return jsonify({"status": "success", "linked_te": linked_te, "linked_te_enabled": linked_te_enabled})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -451,7 +561,7 @@ def api_delete_tc():
         db.save_te(te_key, updated_tcs)
 
         # Cleanup physical TC folder if it exists
-        tc_dir = os.path.join(os.path.abspath(config.EXECUTIONS_DIR), te_key, tc_key)
+        tc_dir = get_tc_dir(te_key, tc_key)
         if os.path.exists(tc_dir):
             import shutil
             shutil.rmtree(tc_dir, ignore_errors=True)
@@ -460,5 +570,423 @@ def api_delete_tc():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# --- AI Test Guidance ---
+@app.route('/api/upload-user-story', methods=['POST'])
+def api_upload_user_story():
+    """Parse an uploaded user story Excel file and save its text content to the TE."""
+    try:
+        import openpyxl
+        te_key = request.form.get('te_key')
+        file = request.files.get('file')
+        if not te_key or not file:
+            return jsonify({"error": "Missing te_key or file"}), 400
+
+        wb = openpyxl.load_workbook(file, data_only=True)
+        rows = []
+        full_text = []
+        for sheet in wb.worksheets:
+            for row in sheet.iter_rows(values_only=True):
+                if any(row):  # skip completely empty rows
+                    seen_texts = set()
+                    row_data = []
+                    for cell in row:
+                        if cell is not None:
+                            text = str(cell).strip()
+                            if not text:
+                                continue
+                            # Deduplicate long text blocks (e.g., duplicated across Web/iOS/Android columns)
+                            if len(text) > 50 and text in seen_texts:
+                                continue
+                            seen_texts.add(text)
+                            row_data.append(text)
+                    
+                    if row_data:
+                        rows.append(row_data)
+                        full_text.append(' | '.join(row_data))
+        
+        content = '\n'.join(full_text)
+        
+        te_data = db.get_te(te_key)
+        user_story = {
+            'filename': file.filename,
+            'uploaded_at': datetime.now().isoformat(),
+            'content': content[:50000],  # cap at 50k chars
+            'row_count': len(rows),
+        }
+        db.save_te(te_key, te_data.get('test_cases', []), user_story=user_story)
+        
+        return jsonify({"status": "success", "user_story": user_story})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/user-story/<te_key>', methods=['GET'])
+def api_get_user_story(te_key):
+    try:
+        te_data = db.get_te(te_key)
+        return jsonify(te_data.get('user_story') or {})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/generate-guide', methods=['POST'])
+def api_generate_guide():
+    """Use AI to generate a test guide for a TC based on the TE's user story."""
+    try:
+        data = request.json or {}
+        tc_key = data.get('tc_key')
+        te_key = data.get('te_key')
+        
+        if not tc_key or not te_key:
+            return jsonify({"error": "Missing tc_key or te_key"}), 400
+            
+        te_data = db.get_te(te_key)
+        user_story = te_data.get('user_story', {}).get('content', '')
+        if not user_story:
+            return jsonify({"error": "No user story uploaded for this TE"}), 400
+            
+        tc = next((t for t in te_data.get('test_cases', []) if t.get('key') == tc_key), None)
+        if not tc:
+            return jsonify({"error": "TC not found"}), 404
+            
+        tc_title = tc.get('name') or tc.get('key')
+        env = te_data.get('environment', 'Unknown')
+        
+        # Send to Gemini
+        prompt = f"""You are a QA testing assistant. Given a user story and a test case title, 
+        generate a concise test guide.
+        
+        User Story Context:
+        {user_story[:8000]}
+        
+        Test Case: {tc_title}
+        Environment: {env}
+        
+        Produce exactly 3 sections. Output them as raw text without markdown headers, but separate each section by a double newline. 
+        Section 1 starts with "WHAT_TO_TEST: " followed by a one sentence summary.
+        Section 2 starts with "STEPS: " followed by numbered step-by-step (max 6 steps).
+        Section 3 starts with "LOOK_FOR: " followed by bullet points of specific things to verify.
+        
+        Keep it concise and actionable."""
+        
+        import defect_draft
+        import config
+        client_result = defect_draft._get_gemini_client()
+        if isinstance(client_result, dict) and "error" in client_result:
+            return jsonify({"error": client_result["error"]}), 500
+        
+        client = client_result
+        response = client.models.generate_content(
+            model=config.get('gemini_model', "gemini-2.5-flash"),
+            contents=[prompt]
+        )
+        text = response.text
+        
+        import re
+        what_match = re.search(r'WHAT_TO_TEST:\s*(.*?)(?=STEPS:|$)', text, re.DOTALL)
+        steps_match = re.search(r'STEPS:\s*(.*?)(?=LOOK_FOR:|$)', text, re.DOTALL)
+        look_match = re.search(r'LOOK_FOR:\s*(.*)', text, re.DOTALL)
+        
+        guide = {
+            "what_to_test": what_match.group(1).strip() if what_match else "Could not extract summary.",
+            "steps": steps_match.group(1).strip() if steps_match else "Could not extract steps.",
+            "look_for": look_match.group(1).strip() if look_match else "Could not extract things to look for.",
+            "story_excerpt": "Generated from user story context.",
+            "generated_at": datetime.now().isoformat()
+        }
+        
+        tc['test_guide'] = guide
+        db.save_te(te_key, te_data['test_cases'])
+        
+        return jsonify({"status": "success", "guide": guide})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# --- Draft Defect Queue ---
+@app.route('/api/save-draft', methods=['POST'])
+def api_save_draft():
+    """Save a defect as a draft — AI work done, but not submitted to Jira yet."""
+    try:
+        data = request.json or {}
+        te_key = data.get('te_key')
+        tc_key = data.get('tc_key')
+        if not te_key or not tc_key:
+            return jsonify({"error": "Missing te_key or tc_key"}), 400
+
+        draft = {
+            'title': data.get('defect_title', ''),
+            'scenario': data.get('scenario', ''),
+            'steps': data.get('steps', ''),
+            'expected': data.get('expected', ''),
+            'actual': data.get('actual', ''),
+            'test_data': data.get('test_data', ''),
+            'qa_analysis': data.get('qa_analysis', ''),
+            'severity': data.get('severity', '1-Low'),
+            'blocked_tcs': data.get('blocked_tcs', ''),
+            'assignee': data.get('assignee', ''),
+            'expected_shots': data.get('expected_shots', []),
+            'actual_shots': data.get('actual_shots', []),
+            'drafted_at': data.get('drafted_at', ''),
+        }
+
+        te_data = db.get_te(te_key)
+        tcs = te_data.get('test_cases', [])
+        for tc in tcs:
+            if tc.get('key') == tc_key:
+                tc['draft_defect'] = draft
+                tc['status'] = 'fail'
+                break
+        db.save_te(te_key, tcs)
+        return jsonify({"status": "saved", "tc_key": tc_key})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/drafts/<te_key>', methods=['GET'])
+def api_get_drafts(te_key):
+    """List all draft defects for a TE."""
+    try:
+        te_data = db.get_te(te_key)
+        tcs = te_data.get('test_cases', [])
+        drafts = []
+        for tc in tcs:
+            if tc.get('draft_defect') and not tc.get('defect_key'):
+                drafts.append({
+                    'tc_key': tc.get('key', ''),
+                    'tc_name': tc.get('name', tc.get('key', '')),
+                    'tc_number': tc.get('tc_number', ''),
+                    'draft': tc['draft_defect'],
+                    'status': tc.get('status', 'fail'),
+                })
+        return jsonify({"drafts": drafts, "count": len(drafts)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/delete-draft', methods=['POST'])
+def api_delete_draft():
+    """Discard a draft defect."""
+    try:
+        data = request.json or {}
+        te_key = data.get('te_key')
+        tc_key = data.get('tc_key')
+        if not te_key or not tc_key:
+            return jsonify({"error": "Missing te_key or tc_key"}), 400
+
+        te_data = db.get_te(te_key)
+        tcs = te_data.get('test_cases', [])
+        for tc in tcs:
+            if tc.get('key') == tc_key:
+                tc.pop('draft_defect', None)
+                break
+        db.save_te(te_key, tcs)
+        return jsonify({"status": "deleted", "tc_key": tc_key})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/submit-draft', methods=['POST'])
+def api_submit_draft():
+    """Submit a single draft defect to Jira."""
+    try:
+        data = request.json or {}
+        te_key = data.get('te_key')
+        tc_key = data.get('tc_key')
+        if not te_key or not tc_key:
+            return jsonify({"error": "Missing te_key or tc_key"}), 400
+
+        te_data = db.get_te(te_key)
+        tcs = te_data.get('test_cases', [])
+        tc = None
+        for t in tcs:
+            if t.get('key') == tc_key:
+                tc = t
+                break
+        if not tc or not tc.get('draft_defect'):
+            return jsonify({"error": "No draft found for this TC"}), 404
+
+        draft = tc['draft_defect']
+        description = defect_draft.build_full_defect_description(
+            scenario=draft.get('scenario', ''),
+            steps=draft.get('steps', ''),
+            expected=draft.get('expected', ''),
+            actual=draft.get('actual', ''),
+            test_data=draft.get('test_data', ''),
+            qa_analysis=draft.get('qa_analysis', ''),
+        )
+        all_shots = draft.get('expected_shots', []) + draft.get('actual_shots', [])
+
+        issue_key = jira_actions.create_defect(
+            summary=draft.get('title', ''),
+            description=description,
+            screenshot_paths=all_shots,
+            assignee=draft.get('assignee'),
+            priority=draft.get('severity', '1-Low'),
+            data=draft,
+        )
+
+        # Update TC in db
+        tc['defect_key'] = issue_key
+        tc['submitted_defect'] = draft
+        tc.pop('draft_defect', None)
+        tc['status'] = 'fail'
+        db.save_te(te_key, tcs)
+
+        return jsonify({"status": "submitted", "issue_key": issue_key, "tc_key": tc_key})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Background batch submission state
+_batch_state = {
+    'running': False,
+    'te_key': '',
+    'total': 0,
+    'completed': 0,
+    'current_tc': '',
+    'results': [],
+    'errors': [],
+}
+
+@app.route('/api/submit-all-drafts', methods=['POST'])
+def api_submit_all_drafts():
+    """Batch submit all drafts for a TE with randomized delays between submissions."""
+    import random
+
+    if _batch_state['running']:
+        return jsonify({"error": "A batch submission is already in progress"}), 409
+
+    data = request.json or {}
+    te_key = data.get('te_key')
+    min_delay = data.get('min_delay_seconds', 120)
+    max_delay = data.get('max_delay_seconds', 300)
+    if not te_key:
+        return jsonify({"error": "Missing te_key"}), 400
+
+    te_data = db.get_te(te_key)
+    tcs = te_data.get('test_cases', [])
+    draft_tcs = [tc for tc in tcs if tc.get('draft_defect') and not tc.get('defect_key')]
+    if not draft_tcs:
+        return jsonify({"error": "No drafts to submit"}), 400
+
+    _batch_state.update({
+        'running': True,
+        'te_key': te_key,
+        'total': len(draft_tcs),
+        'completed': 0,
+        'current_tc': '',
+        'results': [],
+        'errors': [],
+    })
+
+    def batch_worker():
+        try:
+            for i, tc in enumerate(draft_tcs):
+                tc_key = tc.get('key', '')
+                _batch_state['current_tc'] = tc_key
+                try:
+                    draft = tc['draft_defect']
+                    description = defect_draft.build_full_defect_description(
+                        scenario=draft.get('scenario', ''),
+                        steps=draft.get('steps', ''),
+                        expected=draft.get('expected', ''),
+                        actual=draft.get('actual', ''),
+                        test_data=draft.get('test_data', ''),
+                        qa_analysis=draft.get('qa_analysis', ''),
+                    )
+                    all_shots = draft.get('expected_shots', []) + draft.get('actual_shots', [])
+                    issue_key = jira_actions.create_defect(
+                        summary=draft.get('title', ''),
+                        description=description,
+                        screenshot_paths=all_shots,
+                        assignee=draft.get('assignee'),
+                        priority=draft.get('severity', '1-Low'),
+                        data=draft,
+                    )
+                    # Update TC in the live list
+                    tc['defect_key'] = issue_key
+                    tc['submitted_defect'] = draft
+                    tc.pop('draft_defect', None)
+                    tc['status'] = 'fail'
+                    _batch_state['results'].append({'tc_key': tc_key, 'issue_key': issue_key})
+                except Exception as e:
+                    _batch_state['errors'].append({'tc_key': tc_key, 'error': str(e)})
+
+                _batch_state['completed'] = i + 1
+
+                # Save progress after each submission
+                try:
+                    db.save_te(te_key, tcs)
+                except Exception:
+                    pass
+
+                # Wait with randomized delay (skip after last one)
+                if i < len(draft_tcs) - 1:
+                    delay = random.uniform(min_delay, max_delay)
+                    time.sleep(delay)
+        finally:
+            _batch_state['running'] = False
+            _batch_state['current_tc'] = ''
+
+    thread = threading.Thread(target=batch_worker, daemon=True)
+    thread.start()
+    return jsonify({
+        "status": "started",
+        "total": len(draft_tcs),
+        "min_delay": min_delay,
+        "max_delay": max_delay,
+    })
+
+@app.route('/api/batch-status', methods=['GET'])
+def api_batch_status():
+    """Check progress of batch draft submission."""
+    return jsonify(_batch_state)
+
+@app.route('/api/cancel-batch', methods=['POST'])
+def api_cancel_batch():
+    """Cancel running batch submission (stops after current defect finishes)."""
+    if _batch_state['running']:
+        _batch_state['running'] = False
+        return jsonify({"status": "cancelling"})
+    return jsonify({"status": "not_running"})
+
+# --- Settings History (Dropdown Presets) ---
+@app.route('/api/settings-history', methods=['GET', 'POST'])
+def api_settings_history():
+    """GET: Return saved option history for settings fields.
+    POST: Add a new option to the history for a specific field."""
+    import json as json_mod
+    history_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'settings_history.json')
+
+    if request.method == 'GET':
+        try:
+            if os.path.exists(history_file):
+                with open(history_file, 'r', encoding='utf-8') as f:
+                    return jsonify(json_mod.load(f))
+            return jsonify({})
+        except Exception:
+            return jsonify({})
+
+    # POST — save the current settings values as history options
+    try:
+        data = request.json or {}
+        history = {}
+        if os.path.exists(history_file):
+            try:
+                with open(history_file, 'r', encoding='utf-8') as f:
+                    history = json_mod.load(f)
+            except Exception:
+                history = {}
+
+        for field_name, value in data.items():
+            if not value or not str(value).strip():
+                continue
+            val_str = str(value).strip()
+            if field_name not in history:
+                history[field_name] = []
+            if val_str not in history[field_name]:
+                history[field_name].append(val_str)
+
+        with open(history_file, 'w', encoding='utf-8') as f:
+            json_mod.dump(history, f, indent=2)
+
+        return jsonify({"status": "saved"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='127.0.0.1', port=5000, debug=True)

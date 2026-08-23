@@ -27,8 +27,8 @@ DEFAULT_TE_KEY = os.getenv("DEFAULT_TE_KEY", "TE-001")
 EXECUTIONS_DIR = "executions"
 
 # Defect title pattern format
-DEFECT_TITLE_PREFIX = "LightMode_SIT_Android_"
-DEFECT_TITLE_PATTERN = os.getenv("DEFECT_TITLE_PATTERN", "LightMode_SIT_Android_{AI_TITLE}")
+DEFECT_TITLE_PREFIX = os.getenv("DEFECT_TITLE_PREFIX", "LightMode_SIT_Android_")
+DEFECT_TITLE_PATTERN = os.getenv("DEFECT_TITLE_PATTERN", "{AI_TITLE}")
 
 # Fields matching actual Jira form defaults
 DEFECT_BOILERPLATE = {
@@ -64,6 +64,10 @@ AUTO_SAVE_POT = False
 AUTO_SUBMIT_DEFECT = False
 SHARE_SCREENSHOTS_WITH_AI = True
 
+# --- Draft Queue Settings ---
+DRAFT_DELAY_MIN_SECONDS = 120    # Min delay between batch submissions (seconds)
+DRAFT_DELAY_MAX_SECONDS = 300    # Max delay between batch submissions (seconds)
+
 # --- Local file paths ---------------------------------------------------
 BROWSER_STATE_PATH = "jira_session.json"
 
@@ -96,7 +100,12 @@ _KEY_MAPPING = {
     "auto_save_pot": "AUTO_SAVE_POT",
     "auto_submit_defect": "AUTO_SUBMIT_DEFECT",
     "share_screenshots_with_ai": "SHARE_SCREENSHOTS_WITH_AI",
+    "draft_delay_min_seconds": "DRAFT_DELAY_MIN_SECONDS",
+    "draft_delay_max_seconds": "DRAFT_DELAY_MAX_SECONDS",
+    "network_speed": "NETWORK_SPEED",
 }
+
+NETWORK_SPEED = "Normal" # Options: Fast, Normal, Slow, Very Slow
 
 def get(key, default=None):
     if key in _runtime_overrides:

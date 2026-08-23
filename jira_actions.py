@@ -48,6 +48,20 @@ def start_login_session():
                         with _login_lock:
                             _login_state["status"] = "saving"
                         context.storage_state(path=config.BROWSER_STATE_PATH)
+                        try:
+                            import json
+                            with open(config.BROWSER_STATE_PATH, 'r') as f:
+                                state_data = json.load(f)
+                            changed = False
+                            for cookie in state_data.get('cookies', []):
+                                if cookie.get('expires') == -1:
+                                    cookie['expires'] = time.time() + 31536000
+                                    changed = True
+                            if changed:
+                                with open(config.BROWSER_STATE_PATH, 'w') as f:
+                                    json.dump(state_data, f)
+                        except Exception as e:
+                            print(f"[!] Error modifying session cookies: {e}")
                         with _login_lock:
                             _login_state["status"] = "saved"
                             _login_state["message"] = "Session saved successfully!"
@@ -117,6 +131,17 @@ def login_and_save_session():
     save_login_session()
 
 
+def get_timeouts():
+    speed = config.get("network_speed", "Normal")
+    if speed == "Fast":
+        return 15000, 3000
+    elif speed == "Slow":
+        return 60000, 10000
+    elif speed == "Very Slow":
+        return 120000, 20000
+    else:
+        return 30000, 5000 # Normal
+
 def _get_context(p):
     headless_setting = getattr(config, "HEADLESS_BROWSER", False)
     browser = p.chromium.launch(headless=headless_setting)
@@ -129,6 +154,9 @@ def _get_context(p):
         )
 
     context = browser.new_context(storage_state=config.BROWSER_STATE_PATH)
+    action_timeout, _ = get_timeouts()
+    context.set_default_timeout(action_timeout)
+    context.set_default_navigation_timeout(action_timeout)
     return browser, context
 
 
@@ -463,7 +491,7 @@ def create_defect(
         page.goto(f"{config.JIRA_BASE_URL}/secure/CreateIssue.jspa")
         page.wait_for_load_state("networkidle")  # wait for all JS/AUI to finish loading
         # Extra wait for AUI widgets to fully initialise after network idle
-        page.wait_for_selector("#project-field", timeout=15000)
+        page.wait_for_selector("#project-field")
         time.sleep(1.5)
 
         # --- STEP 1: Select Project and Issue Type ('Defect') ---
@@ -522,7 +550,7 @@ def create_defect(
 
         # Wait for Step 2 Form to load - longer delay for slow connections
         try:
-            page.wait_for_selector("#summary, input[name='summary']", timeout=15000)
+            page.wait_for_selector("#summary, input[name='summary']")
             time.sleep(1.5)  # Extra wait for JS/React fields to initialise
         except Exception:
             pass
@@ -721,9 +749,9 @@ def create_defect(
         try:
             if not should_auto_submit:
                 # Wait until navigation away from CreateIssue page
-                page.wait_for_function("!window.location.href.includes('CreateIssue')", timeout=300000)
+                page.wait_for_function("!window.location.href.includes('CreateIssue')")
             
-            page.wait_for_selector(".aui-message-success, #key-val, a.issue-created-key, h1.item-summary", timeout=30000)
+            page.wait_for_selector(".aui-message-success, #key-val, a.issue-created-key, h1.item-summary")
             if page.locator("#key-val").count() > 0:
                 issue_key = page.locator("#key-val").first.inner_text().strip()
             elif page.locator("a.issue-created-key").count() > 0:
@@ -821,11 +849,12 @@ def fetch_te_from_jira(te_key: str) -> dict:
 
     with sync_playwright() as p:
         browser, context = _get_context(p)
+        _, wait_time = get_timeouts()
         page = context.new_page()
         page.goto(url)
         page.wait_for_load_state("domcontentloaded")
         # Give dynamic plugins (like Xray/Zephyr) time to load their tables
-        page.wait_for_timeout(5000)
+        page.wait_for_timeout(wait_time)
 
         summary = ""
         for sum_sel in ["#summary-val", "h1#summary-val", "h1.item-summary", "h1"]:
@@ -875,8 +904,8 @@ def fetch_te_from_jira(te_key: str) -> dict:
             if next_btn:
                 print("  -> Found 'Next' page. Clicking...")
                 try:
-                    next_btn.click(timeout=3000)
-                    page.wait_for_timeout(3000)
+                    next_btn.click()
+                    page.wait_for_timeout(wait_time)
                     page_num += 1
                 except Exception as e:
                     print(f"  -> Could not click 'Next' button: {e}")

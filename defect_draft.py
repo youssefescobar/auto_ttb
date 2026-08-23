@@ -70,7 +70,7 @@ def generate_defect_title(notes: str, tc_key: str = "", te_key: str = "", expect
         return {"error": f"AI Title generation error: {e}"}
 
     prefix = config.get("defect_title_prefix", "LightMode_SIT_Android_")
-    pattern = config.get("defect_title_pattern", "LightMode_SIT_Android_{AI_TITLE}")
+    pattern = config.get("defect_title_pattern", "{AI_TITLE}")
     
     if "{AI_TITLE}" in pattern:
         formatted_title = pattern.format(TE_KEY=te_key, TC_KEY=tc_key, AI_TITLE=ai_title)

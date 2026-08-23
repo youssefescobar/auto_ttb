@@ -21,6 +21,21 @@
         <button class="breadcrumb-item btn-ghost" onclick="goHome()">Home</button>
         <span class="breadcrumb-sep">/</span>
         <span id="breadcrumb-te" class="breadcrumb-item active"></span>
+        <select id="te-env-select" class="env-select" style="margin-left: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-muted); padding: 0.15rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.75rem; cursor: pointer; outline: none;">
+          <option value="SIT">SIT</option>
+          <option value="PP">PP</option>
+          <option value="Prod">Prod</option>
+          <option value="UAT">UAT</option>
+          <option value="Unknown">Unknown</option>
+        </select>
+        <select id="te-lang-select" class="lang-select" style="margin-left: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-muted); padding: 0.15rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.75rem; cursor: pointer; outline: none;">
+          <option value="English">English</option>
+          <option value="Arabic">Arabic</option>
+        </select>
+        <div class="link-te-container" style="display: inline-flex; align-items: center; margin-left: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.15rem 0.5rem;">
+          <input type="checkbox" id="te-link-toggle" title="Enable Linked TE" style="margin-right: 0.3rem;">
+          <input type="text" id="te-link-input" placeholder="Linked TE (e.g. QA-123)" style="background: transparent; border: none; color: var(--text-muted); font-size: 0.75rem; width: 120px; outline: none;">
+        </div>
       </nav>
     </div>
     <div class="topbar-right">
@@ -40,82 +55,129 @@
   <div id="settings-overlay" class="overlay hidden"></div>
   <div id="settings-panel" class="side-panel hidden">
     <div class="panel-header">
-      <h2>Settings & Fixed Jira Boilerplate</h2>
+      <h2>⚙ Settings</h2>
       <button id="btn-close-settings" class="btn-icon">&times;</button>
     </div>
     <div class="panel-content">
       <form id="settings-form">
-        <h3 class="settings-section-title">AI & Privacy</h3>
+
+        <h3 class="settings-section-title">🤖 AI & Privacy</h3>
         <div class="form-group checkbox-group">
           <label class="checkbox-label">
             <input type="checkbox" name="share_screenshots_with_ai" id="setting-share-screenshots">
             <span>Share screenshots with AI</span>
           </label>
-          <small class="help-text text-muted">When disabled, only text notes are sent to Gemini AI for defect drafting. Screenshots stay local.</small>
+          <small class="help-text text-muted">When disabled, only text notes are sent to Gemini AI for defect drafting.</small>
         </div>
 
-        <h3 class="settings-section-title">Jira Instance & Scope</h3>
+        <h3 class="settings-section-title">🌐 Jira Instance</h3>
         <div class="form-group">
           <label>Jira Base URL</label>
           <input type="text" name="jira_base_url" placeholder="https://jira.company.com">
         </div>
         <div class="form-group">
+          <label>Network Speed / Timeout (Browser action speed)</label>
+          <select name="network_speed">
+            <option value="Fast">Fast (15s timeout)</option>
+            <option value="Normal">Normal (30s timeout)</option>
+            <option value="Slow">Slow (60s timeout)</option>
+            <option value="Very Slow">Very Slow (120s timeout)</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label>Project</label>
-          <input type="text" name="project" placeholder="B2B Digital Revamp (BDR)">
+          <div class="setting-with-history">
+            <input type="text" name="project" placeholder="B2B Digital Revamp (BDR)">
+            <select class="history-dropdown hidden" data-for="project"><option value="">— saved options —</option></select>
+          </div>
         </div>
         <div class="form-group">
           <label>For Project / Scope</label>
-          <input type="text" name="for_project" placeholder='JK26-3835 Technical project :"B2B Digital Revamp..."'>
+          <div class="setting-with-history">
+            <input type="text" name="for_project" placeholder='JK26-3835 Technical project...'>
+            <select class="history-dropdown hidden" data-for="for_project"><option value="">— saved options —</option></select>
+          </div>
         </div>
         <div class="form-group">
           <label>Demo</label>
-          <input type="text" name="demo" placeholder="Demo 1">
+          <div class="setting-with-history">
+            <input type="text" name="demo" placeholder="Demo 1">
+            <select class="history-dropdown hidden" data-for="demo"><option value="">— saved options —</option></select>
+          </div>
         </div>
 
-        <h3 class="settings-section-title">Defect Classification & Fixed Fields</h3>
+        <h3 class="settings-section-title">🐛 Defect Fields</h3>
         <div class="form-group">
           <label>Issue Type</label>
           <input type="text" name="issue_type" placeholder="Defect">
         </div>
         <div class="form-group">
           <label>Component/s</label>
-          <input type="text" name="components" placeholder="Android">
+          <div class="setting-with-history">
+            <input type="text" name="components" placeholder="Android">
+            <select class="history-dropdown hidden" data-for="components"><option value="">— saved options —</option></select>
+          </div>
         </div>
         <div class="form-group">
           <label>Impacted System</label>
-          <input type="text" name="impacted_system" placeholder="Mobile App">
+          <div class="setting-with-history">
+            <input type="text" name="impacted_system" placeholder="Mobile App">
+            <select class="history-dropdown hidden" data-for="impacted_system"><option value="">— saved options —</option></select>
+          </div>
         </div>
         <div class="form-group">
-          <label>Defect Type & Filed Against</label>
-          <div class="form-row">
+          <label>Defect Type</label>
+          <div class="setting-with-history">
             <input type="text" name="defect_type" placeholder="B2B Digital Revamp">
+            <select class="history-dropdown hidden" data-for="defect_type"><option value="">— saved options —</option></select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Filed Against</label>
+          <div class="setting-with-history">
             <input type="text" name="filed_against" placeholder="BDR-ANDROID">
+            <select class="history-dropdown hidden" data-for="filed_against"><option value="">— saved options —</option></select>
           </div>
         </div>
         <div class="form-group">
           <label>Defect Environment</label>
-          <input type="text" name="defect_environment" placeholder="Integration">
+          <div class="setting-with-history">
+            <input type="text" name="defect_environment" placeholder="Integration">
+            <select class="history-dropdown hidden" data-for="defect_environment"><option value="">— saved options —</option></select>
+          </div>
         </div>
         <div class="form-group">
           <label>Defect Phase</label>
-          <input type="text" name="defect_phase" placeholder="QA">
+          <div class="setting-with-history">
+            <input type="text" name="defect_phase" placeholder="QA">
+            <select class="history-dropdown hidden" data-for="defect_phase"><option value="">— saved options —</option></select>
+          </div>
         </div>
         <div class="form-group">
           <label>Labels</label>
-          <input type="text" name="labels" placeholder="Lightmode">
+          <div class="setting-with-history">
+            <input type="text" name="labels" placeholder="Lightmode">
+            <select class="history-dropdown hidden" data-for="labels"><option value="">— saved options —</option></select>
+          </div>
         </div>
         <div class="form-group">
           <label>Milestone Type</label>
-          <input type="text" name="milestone_type" placeholder="Batch 1">
+          <div class="setting-with-history">
+            <input type="text" name="milestone_type" placeholder="Batch 1">
+            <select class="history-dropdown hidden" data-for="milestone_type"><option value="">— saved options —</option></select>
+          </div>
         </div>
 
-        <h3 class="settings-section-title">Title & Transitions</h3>
+        <h3 class="settings-section-title">📝 Title & Transitions</h3>
         <div class="form-group">
           <label>Defect Title Prefix</label>
-          <input type="text" name="defect_title_prefix" placeholder="LightMode_SIT_Android_">
+          <div class="setting-with-history">
+            <input type="text" name="defect_title_prefix" placeholder="LightMode_SIT_Android_">
+            <select class="history-dropdown hidden" data-for="defect_title_prefix"><option value="">— saved options —</option></select>
+          </div>
         </div>
         <div class="form-group">
-          <label>Transition: Executing / Pass / Fail</label>
+          <label>Transitions</label>
           <div class="form-row">
             <input type="text" name="transition_executing" placeholder="Start Progress">
             <input type="text" name="transition_pass" placeholder="Pass">
@@ -123,17 +185,26 @@
           </div>
         </div>
 
-        <h3 class="settings-section-title">Proof of Testing (POT)</h3>
+        <h3 class="settings-section-title">📄 Proof of Testing</h3>
         <div class="form-group checkbox-group">
           <label class="checkbox-label">
             <input type="checkbox" name="auto_save_pot" id="setting-auto-save-pot">
             <span>Auto-save to POT on Pass / Fail</span>
           </label>
-          <small class="help-text text-muted">When OFF, passing or failing a test case will not automatically save to POT. You can still save manually using the "Save to POT" button.</small>
+        </div>
+
+        <h3 class="settings-section-title">⏱ Draft Queue Timing</h3>
+        <div class="form-group">
+          <label>Min delay between batch submissions (seconds)</label>
+          <input type="number" name="draft_delay_min_seconds" placeholder="120" min="0">
+        </div>
+        <div class="form-group">
+          <label>Max delay between batch submissions (seconds)</label>
+          <input type="number" name="draft_delay_max_seconds" placeholder="300" min="0">
         </div>
 
         <div class="panel-actions">
-          <button type="button" id="btn-save-settings" class="btn btn-primary w-full">Save Settings</button>
+          <button type="button" id="btn-save-settings" class="btn btn-primary w-full">💾 Save Settings</button>
         </div>
       </form>
     </div>
@@ -176,10 +247,16 @@
 
       <div class="toolbar">
         <div class="toolbar-left">
+          <button id="btn-raise-adhoc-defect" class="btn btn-sm btn-primary" style="background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4)">🐛 Ad-Hoc Defect</button>
           <button id="btn-show-add-tc" class="btn btn-sm btn-outline">＋ Add TC</button>
           <button id="btn-add-multiple-tc" class="btn btn-sm btn-outline">📋 Bulk Add</button>
           <div class="toolbar-divider"></div>
+          <button id="btn-show-draft-queue" class="btn btn-sm btn-outline" style="background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3)">📦 Draft Queue <span id="draft-queue-badge" class="draft-badge hidden">0</span></button>
+          <div class="toolbar-divider"></div>
           <button id="btn-rebuild-pot" class="btn btn-sm btn-secondary">📄 Generate POT</button>
+          <button id="btn-upload-story" class="btn btn-sm btn-outline">📎 User Story</button>
+          <input type="file" id="input-user-story" accept=".xlsx,.xls,.csv" class="hidden">
+          <span id="story-indicator" class="badge text-xs hidden" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; cursor: pointer;" title="Click to clear user story">📎 Story loaded</span>
           <button id="btn-download-poc" class="btn btn-sm btn-outline">⬇ Download POT</button>
           <button id="btn-delete-te" class="btn btn-sm btn-danger-outline">🗑 Delete TE</button>
         </div>
@@ -206,6 +283,30 @@
         <button id="btn-add-multiple-submit" class="btn btn-primary btn-sm">Add All</button>
       </div>
 
+      <!-- Draft Queue Panel (hidden by default) -->
+      <div id="draft-queue-panel" class="hidden draft-queue-panel">
+        <div class="draft-queue-header">
+          <h3>📦 Draft Queue</h3>
+          <div class="draft-queue-actions">
+            <div class="draft-delay-config">
+              <label class="text-xs text-muted">Delay:</label>
+              <input type="number" id="batch-min-delay" value="120" min="0" max="3600" class="input-sm" style="width: 60px;" title="Min seconds">
+              <span class="text-muted text-xs">–</span>
+              <input type="number" id="batch-max-delay" value="300" min="0" max="3600" class="input-sm" style="width: 60px;" title="Max seconds">
+              <span class="text-muted text-xs">sec</span>
+            </div>
+            <button id="btn-submit-all-drafts" class="btn btn-sm btn-primary">🚀 Raise All</button>
+            <button id="btn-cancel-batch" class="btn btn-sm btn-danger-outline hidden">✋ Cancel</button>
+          </div>
+        </div>
+        <div id="batch-progress" class="hidden" style="margin: 0.75rem 0;">
+          <div class="progress-bar" style="width: 100%; height: 6px;"><div id="batch-progress-fill" class="progress-fill"></div></div>
+          <p id="batch-progress-text" class="text-xs text-muted" style="margin-top: 0.25rem;"></p>
+        </div>
+        <div id="draft-queue-list"></div>
+        <div id="draft-queue-empty" class="text-muted text-sm" style="padding: 1.5rem; text-align: center;">No drafts yet. Fail a TC → Draft with AI → Save as Draft</div>
+      </div>
+
       <div id="tc-grid" class="tc-grid"></div>
     </section>
 
@@ -219,6 +320,10 @@
         <div class="detail-header-left">
           <h2 id="detail-tc-key">TC-XXXXX</h2>
           <span id="detail-tc-status" class="status-badge pending">PENDING</span>
+        </div>
+        <div class="detail-header-center hidden" id="bilingual-toggle-container" style="display: flex; gap: 0.25rem; background: var(--bg-body); padding: 0.25rem; border-radius: var(--radius-md); border: 1px solid var(--border);">
+          <button id="toggle-lang-en" class="btn btn-sm btn-ghost active" style="min-width: 60px;">EN</button>
+          <button id="toggle-lang-ar" class="btn btn-sm btn-ghost" style="min-width: 60px;">AR</button>
         </div>
         <div class="detail-header-right">
           <div class="inline-field">
@@ -276,6 +381,39 @@
         <button id="btn-fail" class="btn btn-fail">❌ Fail</button>
         <button id="btn-skip" class="btn btn-ghost">⏭ Skip</button>
       </div>
+
+      <!-- Test Guide side panel (collapsible) -->
+      <div id="test-guide-panel" class="test-guide-panel hidden">
+        <div class="guide-header">
+          <h3 style="margin:0; font-size: 0.95rem;">🧭 Test Guide</h3>
+          <div>
+            <button class="btn btn-xs btn-outline" id="btn-generate-guide">Generate</button>
+            <button class="btn btn-xs btn-ghost" id="btn-close-guide" style="padding: 0 4px;">&times;</button>
+          </div>
+        </div>
+        <div id="guide-loading" class="hidden" style="text-align:center; padding: 1rem; color: var(--text-muted);">
+          <div class="spinner" style="margin: 0 auto 0.5rem auto;"></div>
+          <small>AI reading user story...</small>
+        </div>
+        <div id="guide-content" class="guide-content hidden">
+          <div class="guide-section">
+            <label>What to Test</label>
+            <p id="guide-what" style="font-size: 0.95rem; margin: 0;"></p>
+          </div>
+          <div class="guide-section">
+            <label>Steps</label>
+            <div id="guide-steps" style="font-size: 0.9rem; white-space: pre-wrap; line-height: 1.6;"></div>
+          </div>
+          <div class="guide-section">
+            <label>Look For</label>
+            <div id="guide-lookfor" style="font-size: 0.9rem; white-space: pre-wrap; line-height: 1.6;"></div>
+          </div>
+          <div class="guide-section guide-excerpt">
+            <button id="btn-copy-guide" class="btn btn-xs btn-outline w-full">📋 Copy Guide</button>
+          </div>
+        </div>
+      </div>
+
     </section>
 
     <!-- Section 4: Defect Preview -->
@@ -284,7 +422,13 @@
         <button class="btn btn-ghost" onclick="goBackToGrid()">← Back</button>
         <button class="btn btn-ghost" onclick="goHome()">🏠 Home</button>
       </div>
-      <h2 id="defect-preview-title">Defect Preview</h2>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2 id="defect-preview-title" style="margin: 0;">Defect Preview</h2>
+        <div class="defect-bilingual-toggle hidden" id="defect-bilingual-toggle-container" style="display: flex; gap: 0.25rem; background: var(--bg-body); padding: 0.25rem; border-radius: var(--radius-md); border: 1px solid var(--border);">
+          <button id="defect-toggle-lang-en" class="btn btn-sm btn-ghost active" style="min-width: 60px;">EN</button>
+          <button id="defect-toggle-lang-ar" class="btn btn-sm btn-ghost" style="min-width: 60px;">AR</button>
+        </div>
+      </div>
 
       <div id="defect-form" class="defect-grid">
         <!-- Left column: content fields -->
@@ -355,6 +499,7 @@
         <button id="btn-draft-defect" class="btn btn-primary">🤖 Draft with AI</button>
         <button id="btn-regenerate-defect" class="btn btn-outline">🔄 Regenerate</button>
         <button id="btn-copy-defect" class="btn btn-outline">📋 Copy</button>
+        <button id="btn-save-as-draft" class="btn btn-outline" style="background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3)">📦 Save as Draft</button>
         <button id="btn-submit-defect" class="btn btn-primary btn-lg">🚀 Submit to Jira</button>
       </div>
 
