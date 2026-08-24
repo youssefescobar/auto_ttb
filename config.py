@@ -10,15 +10,15 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # --- Jira connection -------------------------------------------------
-JIRA_BASE_URL = os.getenv("JIRA_BASE_URL", "https://jira.prod.mobily.lan").rstrip('/')   # no trailing slash
-JIRA_USERNAME = os.getenv("JIRA_USERNAME", "80129258")                   # domain login
+JIRA_BASE_URL = os.getenv("JIRA_BASE_URL", "https://jira.company.com").rstrip('/')   # no trailing slash
+JIRA_USERNAME = os.getenv("JIRA_USERNAME", "username")                   # domain login
 HEADLESS_BROWSER = False                           # Set False to watch Playwright execute
 
 # --- Project / CR Scope Settings ------------------------------------
-PROJECT_KEY = os.getenv("PROJECT_KEY", "JK26-3835")          
-PROJECT_NAME = "B2B Digital Revamp (BDR)"
-TECHNICAL_PROJECT = "B2B Digital Revamp - Font Family and Light Mode CR Scope"
-ISSUE_KEY = "JK26-3835"
+PROJECT_KEY = os.getenv("PROJECT_KEY", "PROJ-1234")          
+PROJECT_NAME = "My Project Name"
+TECHNICAL_PROJECT = "My Technical Project Scope"
+ISSUE_KEY = "PROJ-1234"
 DEMO_NAME = "Demo 1"
 DEFECT_ISSUE_TYPE = os.getenv("DEFECT_ISSUE_TYPE", "Defect")     
 
@@ -32,15 +32,15 @@ DEFECT_TITLE_PATTERN = os.getenv("DEFECT_TITLE_PATTERN", "{AI_TITLE}")
 
 # Fields matching actual Jira form defaults
 DEFECT_BOILERPLATE = {
-    "project": "B2B Digital Revamp (BDR)",
+    "project": "My Project Name",
     "issue_type": "Defect",
-    "for_project": "JK26-3835 Technical project:\"B2B Digital Revamp - Font Family and Light Mode CR Scope\"",
+    "for_project": "PROJ-1234 Technical project scope",
     "demo": "Demo 1",
-    "components": ["Android"],
-    "impacted_system": "Mobile App",
-    "defect_type": "B2B Digital Revamp",
-    "filed_against": "BDR-ANDROID",
-    "defect_environment": "Integration",
+    "components": ["Component"],
+    "impacted_system": "System",
+    "defect_type": "Defect Type",
+    "filed_against": "Team",
+    "defect_environment": "Environment",
     "defect_phase": "QA",
     "usability_issue": "No",
     "labels": ["Lightmode"],

@@ -160,13 +160,14 @@ def api_generate_defect():
         notes = data.get('notes', '')
         tc_key = data.get('tc_key', '')
         te_key = data.get('te_key', '')
-        expected_shots = data.get('expected_shots', [])
-        actual_shots = data.get('actual_shots', [])
 
-        # Check AI screenshot sharing setting
-        if not config.get('share_screenshots_with_ai', True):
-            expected_shots = []
-            actual_shots = []
+        expected_shots = []
+        actual_shots = []
+        
+        # Check AI screenshot sharing setting (UI option remains, but functionality is disabled)
+        # if not config.get('share_screenshots_with_ai', True):
+        #     expected_shots = []
+        #     actual_shots = []
 
         # AI Title
         title_res = defect_draft.generate_defect_title(
@@ -573,132 +574,25 @@ def api_delete_tc():
 # --- AI Test Guidance ---
 @app.route('/api/upload-user-story', methods=['POST'])
 def api_upload_user_story():
-    """Parse an uploaded user story Excel file and save its text content to the TE."""
-    try:
-        import openpyxl
-        te_key = request.form.get('te_key')
-        file = request.files.get('file')
-        if not te_key or not file:
-            return jsonify({"error": "Missing te_key or file"}), 400
-
-        wb = openpyxl.load_workbook(file, data_only=True)
-        rows = []
-        full_text = []
-        for sheet in wb.worksheets:
-            for row in sheet.iter_rows(values_only=True):
-                if any(row):  # skip completely empty rows
-                    seen_texts = set()
-                    row_data = []
-                    for cell in row:
-                        if cell is not None:
-                            text = str(cell).strip()
-                            if not text:
-                                continue
-                            # Deduplicate long text blocks (e.g., duplicated across Web/iOS/Android columns)
-                            if len(text) > 50 and text in seen_texts:
-                                continue
-                            seen_texts.add(text)
-                            row_data.append(text)
-                    
-                    if row_data:
-                        rows.append(row_data)
-                        full_text.append(' | '.join(row_data))
-        
-        content = '\n'.join(full_text)
-        
-        te_data = db.get_te(te_key)
-        user_story = {
-            'filename': file.filename,
-            'uploaded_at': datetime.now().isoformat(),
-            'content': content[:50000],  # cap at 50k chars
-            'row_count': len(rows),
-        }
-        db.save_te(te_key, te_data.get('test_cases', []), user_story=user_story)
-        
-        return jsonify({"status": "success", "user_story": user_story})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    """Disabled user story functionality."""
+    return jsonify({"status": "success", "user_story": {"filename": "Functionality Disabled", "row_count": 0, "content": ""}})
 
 @app.route('/api/user-story/<te_key>', methods=['GET'])
 def api_get_user_story(te_key):
-    try:
-        te_data = db.get_te(te_key)
-        return jsonify(te_data.get('user_story') or {})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    """Disabled user story functionality."""
+    return jsonify({})
 
 @app.route('/api/generate-guide', methods=['POST'])
 def api_generate_guide():
-    """Use AI to generate a test guide for a TC based on the TE's user story."""
-    try:
-        data = request.json or {}
-        tc_key = data.get('tc_key')
-        te_key = data.get('te_key')
-        
-        if not tc_key or not te_key:
-            return jsonify({"error": "Missing tc_key or te_key"}), 400
-            
-        te_data = db.get_te(te_key)
-        user_story = te_data.get('user_story', {}).get('content', '')
-        if not user_story:
-            return jsonify({"error": "No user story uploaded for this TE"}), 400
-            
-        tc = next((t for t in te_data.get('test_cases', []) if t.get('key') == tc_key), None)
-        if not tc:
-            return jsonify({"error": "TC not found"}), 404
-            
-        tc_title = tc.get('name') or tc.get('key')
-        env = te_data.get('environment', 'Unknown')
-        
-        # Send to Gemini
-        prompt = f"""You are a QA testing assistant. Given a user story and a test case title, 
-        generate a concise test guide.
-        
-        User Story Context:
-        {user_story[:8000]}
-        
-        Test Case: {tc_title}
-        Environment: {env}
-        
-        Produce exactly 3 sections. Output them as raw text without markdown headers, but separate each section by a double newline. 
-        Section 1 starts with "WHAT_TO_TEST: " followed by a one sentence summary.
-        Section 2 starts with "STEPS: " followed by numbered step-by-step (max 6 steps).
-        Section 3 starts with "LOOK_FOR: " followed by bullet points of specific things to verify.
-        
-        Keep it concise and actionable."""
-        
-        import defect_draft
-        import config
-        client_result = defect_draft._get_gemini_client()
-        if isinstance(client_result, dict) and "error" in client_result:
-            return jsonify({"error": client_result["error"]}), 500
-        
-        client = client_result
-        response = client.models.generate_content(
-            model=config.get('gemini_model', "gemini-2.5-flash"),
-            contents=[prompt]
-        )
-        text = response.text
-        
-        import re
-        what_match = re.search(r'WHAT_TO_TEST:\s*(.*?)(?=STEPS:|$)', text, re.DOTALL)
-        steps_match = re.search(r'STEPS:\s*(.*?)(?=LOOK_FOR:|$)', text, re.DOTALL)
-        look_match = re.search(r'LOOK_FOR:\s*(.*)', text, re.DOTALL)
-        
-        guide = {
-            "what_to_test": what_match.group(1).strip() if what_match else "Could not extract summary.",
-            "steps": steps_match.group(1).strip() if steps_match else "Could not extract steps.",
-            "look_for": look_match.group(1).strip() if look_match else "Could not extract things to look for.",
-            "story_excerpt": "Generated from user story context.",
-            "generated_at": datetime.now().isoformat()
-        }
-        
-        tc['test_guide'] = guide
-        db.save_te(te_key, te_data['test_cases'])
-        
-        return jsonify({"status": "success", "guide": guide})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    """Disabled user story functionality."""
+    guide = {
+        "what_to_test": "User story functionality has been disabled.",
+        "steps": "1. N/A",
+        "look_for": "- N/A",
+        "story_excerpt": "Disabled.",
+        "generated_at": datetime.now().isoformat()
+    }
+    return jsonify({"status": "success", "guide": guide})
 
 # --- Draft Defect Queue ---
 @app.route('/api/save-draft', methods=['POST'])

@@ -82,15 +82,15 @@ function updateFixedFieldsDisplay() {
   if (!list) return;
   const s = state.settings;
   list.innerHTML = `
-    <li><b>Project:</b> ${s.project || 'B2B Digital Revamp (BDR)'}</li>
+    <li><b>Project:</b> ${s.project || 'My Project Name'}</li>
     <li><b>Issue Type:</b> ${s.issue_type || 'Defect'}</li>
-    <li><b>For Project:</b> ${s.for_project || 'JK26-3835 Technical project...'}</li>
+    <li><b>For Project:</b> ${s.for_project || 'PROJ-1234 Technical project...'}</li>
     <li><b>Demo:</b> ${s.demo || 'Demo 1'}</li>
-    <li><b>Component/s:</b> ${s.components || 'Android'}</li>
-    <li><b>Impacted System:</b> ${s.impacted_system || 'Mobile App'}</li>
-    <li><b>Defect Type:</b> ${s.defect_type || 'B2B Digital Revamp'}</li>
-    <li><b>Filed Against:</b> ${s.filed_against || 'BDR-ANDROID'}</li>
-    <li><b>Environment:</b> ${s.defect_environment || 'Integration'}</li>
+    <li><b>Component/s:</b> ${s.components || 'Component'}</li>
+    <li><b>Impacted System:</b> ${s.impacted_system || 'System'}</li>
+    <li><b>Defect Type:</b> ${s.defect_type || 'Defect Type'}</li>
+    <li><b>Filed Against:</b> ${s.filed_against || 'Team'}</li>
+    <li><b>Environment:</b> ${s.defect_environment || 'Environment'}</li>
     <li><b>Defect Phase:</b> ${s.defect_phase || 'QA'}</li>
     <li><b>Labels:</b> ${s.labels || 'Lightmode'}</li>
     <li><b>Usability / Re-occurrence:</b> No / No</li>
@@ -781,7 +781,7 @@ function openJiraTC(tcKey) {
     }
   }
 
-  const baseUrl = (state.settings && state.settings.jira_base_url) ? state.settings.jira_base_url : 'https://jira.prod.mobily.lan';
+  const baseUrl = (state.settings && state.settings.jira_base_url) ? state.settings.jira_base_url : 'https://jira.company.com';
   const url = `${baseUrl.replace(/\/$/, '')}/browse/${tcNumber}`;
   window.open(url, '_blank');
 }
@@ -1745,7 +1745,7 @@ function openJiraTE() {
     showToast('Please enter or select a TE Key first', 'error');
     return;
   }
-  const baseUrl = (state.settings && state.settings.jira_base_url) ? state.settings.jira_base_url : 'https://jira.prod.mobily.lan';
+  const baseUrl = (state.settings && state.settings.jira_base_url) ? state.settings.jira_base_url : 'https://jira.company.com';
   const url = `${baseUrl.replace(/\/$/, '')}/browse/${key}`;
   window.open(url, '_blank');
 }

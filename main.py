@@ -141,7 +141,7 @@ def run_interactive_wizard(tc_key: str = None, te_key: str = None):
 
         print("\nGenerating AI Defect Title & Structured Content with Gemini...")
         
-        # Title starts with LightMode_SIT_Android_
+        # Title starts with prefix (handled by generator)
         proposed_summary = generate_defect_title(notes, tc_key=tc_key, te_key=te_key, actual_shots=shots)
         
         # AI generates Scenario, Steps to Recreate, Expected Result, Actual Result

@@ -505,24 +505,26 @@ def create_defect(
             if not is_step_2:
                 print("  -> Executing Step 1: Project & Issue Type selection...")
 
-                # 1. Project — type "B2B Digital Revamp (BDR)" then press Enter
+                # 1. Project — type project name then press Enter
                 proj_input = page.locator("#project-field")
                 proj_input.click()
                 proj_input.click(click_count=3)
-                proj_input.type("B2B Digital Revamp (BDR)", delay=40)
+                proj_name = config.get("project", "B2B Digital Revamp (BDR)")
+                proj_input.type(proj_name, delay=40)
                 time.sleep(0.5)
                 page.keyboard.press("Enter")
-                print("     Project: typed + Enter")
+                print(f"     Project: typed {proj_name} + Enter")
                 time.sleep(0.8)  # wait for issue types to reload
 
-                # 2. Issue Type — type "Defect" then press Enter
+                # 2. Issue Type — type issue type then press Enter
                 it_input = page.locator("#issuetype-field")
                 it_input.click()
                 it_input.click(click_count=3)
-                it_input.type("Defect", delay=40)
+                it_name = config.get("issue_type", "Defect")
+                it_input.type(it_name, delay=40)
                 time.sleep(0.5)
                 page.keyboard.press("Enter")
-                print("     Issue Type: typed + Enter")
+                print(f"     Issue Type: typed {it_name} + Enter")
                 time.sleep(0.3)
 
                 # 3. Click Next button
@@ -574,7 +576,8 @@ def create_defect(
         if react_input.count() > 0 and react_input.first.is_visible(timeout=1000):
             try:
                 react_input.first.click()
-                react_input.first.fill("JK26-3835")
+                fp_val = config.get("for_project", "JK26-3835")
+                react_input.first.fill(fp_val)
                 time.sleep(1.5)  # wait for React dropdown
                 page.keyboard.press("ArrowDown")
                 page.keyboard.press("Enter")
@@ -836,7 +839,7 @@ def add_comment_with_screenshots(issue_key: str, comment_text: str, screenshot_p
 
 def fetch_te_from_jira(te_key: str) -> dict:
     """
-    Navigates to https://jira.prod.mobily.lan/browse/<te_key> using the saved Jira session.
+    Navigates to https://jira.company.com/browse/<te_key> using the saved Jira session.
     Scrapes the TE summary/title and any linked Test Case (TC) keys.
     """
     # Handle full URLs: extract key from URL if needed
