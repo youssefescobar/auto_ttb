@@ -1,0 +1,173 @@
+"""Tests for jira_rest.py against an in-memory fake Jira (no network)."""
+import json
+import os
+import sys
+
+import pytest
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import config  # noqa: E402
+import jira_rest  # noqa: E402
+
+
+class FakeResponse:
+    def __init__(self, status, body=None):
+        self.status_code = status
+        self._body = body
+        self.content = b"" if body is None else json.dumps(body).encode()
+        self.text = self.content.decode()
+
+    def json(self):
+        if self._body is None:
+            raise ValueError("no body")
+        return self._body
+
+
+SELECT = {"type": "option", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:select"}
+
+
+def opt(i, v):
+    return {"id": str(i), "value": v}
+
+
+class FakeJira:
+    def __init__(self):
+        self.calls = []
+        self.created = None
+        self.reject_fields = {}
+        self.meta = [
+            {"fieldId": "summary", "schema": {"type": "string"}},
+            {"fieldId": "description", "schema": {"type": "string"}},
+            {"fieldId": "components", "schema": {"type": "array", "items": "component"},
+             "allowedValues": [{"id": "10", "name": "Android"}, {"id": "11", "name": "iOS"}]},
+            {"fieldId": "labels", "schema": {"type": "array", "items": "string"}},
+            {"fieldId": "assignee", "schema": {"type": "user"}},
+            {"fieldId": jira_rest.FIELD_SEVERITY, "schema": SELECT, "allowedValues": [opt(1, "1-Low"), opt(2, "2-Medium")]},
+            {"fieldId": jira_rest.FIELD_SCENARIO, "schema": {"type": "string"}},
+            {"fieldId": jira_rest.FIELD_TCS_BLOCKED, "schema": {"type": "number"}},
+            {"fieldId": jira_rest.FIELD_ENVIRONMENT, "schema": SELECT, "allowedValues": [opt(5, "Integration")]},
+            {"fieldId": jira_rest.FIELD_DEFECT_TYPE,
+             "schema": {"type": "option-with-child", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:cascadingselect"},
+             "allowedValues": [{"id": "41119", "value": "B2B Digital Revamp",
+                                "children": [{"id": "41813", "value": "BDR-ANDROID"}]}]},
+            {"fieldId": jira_rest.FIELD_DEMO, "schema": SELECT, "allowedValues": [opt(7, "Demo 1")]},
+        ]
+
+    def request(self, method, url, **kw):
+        path = url.split("://", 1)[-1].split("/", 1)[-1]
+        path = "/" + path
+        self.calls.append((method, path, kw))
+        if path == "/rest/api/2/myself":
+            return FakeResponse(200, {"name": "qa1", "displayName": "QA One"})
+        if path.endswith("/transitions") and method == "GET":
+            return FakeResponse(200, {"transitions": [{"id": "11", "name": "Start Progress"}, {"id": "21", "name": "Pass"}]})
+        if path.endswith("/transitions") and method == "POST":
+            return FakeResponse(204)
+        if path == "/rest/api/2/issue/createmeta/BDR/issuetypes":
+            return FakeResponse(200, {"values": [{"id": "1", "name": "Bug"}, {"id": "42", "name": "Defect"}]})
+        if path == "/rest/api/2/issue/createmeta/BDR/issuetypes/42":
+            return FakeResponse(200, {"values": self.meta, "isLast": True})
+        if path == "/rest/api/2/user/search":
+            return FakeResponse(200, [{"name": "sshukla", "displayName": "Saurabh"}])
+        if path == "/rest/api/2/issue" and method == "POST":
+            fields = kw["json"]["fields"]
+            bad = {f: "not on screen" for f in self.reject_fields if f in fields}
+            if bad:
+                self.reject_fields = {}
+                return FakeResponse(400, {"errorMessages": [], "errors": bad})
+            self.created = fields
+            return FakeResponse(201, {"id": "9", "key": "BDR-77"})
+        if path == "/rest/api/2/issueLinkType":
+            return FakeResponse(200, {"issueLinkTypes": [{"name": "Relates", "inward": "relates to", "outward": "relates to"}]})
+        if path in ("/rest/api/2/issueLink",) or path.endswith("/attachments") or path.endswith("/comment"):
+            return FakeResponse(201, {})
+        if path == "/rest/api/2/issue/TE-5":
+            return FakeResponse(200, {"fields": {"summary": "Exec 5", "issuelinks": [], "subtasks": []}})
+        if path == "/rest/raven/1.0/api/testexec/TE-5/test":
+            return FakeResponse(200, [{"key": "TC-2"}, {"key": "TC-1"}])
+        if path == "/rest/api/2/search":
+            return FakeResponse(200, {"issues": [{"key": "TC-1", "fields": {"summary": "Login"}},
+                                                 {"key": "TC-2", "fields": {"summary": "Logout"}}]})
+        return FakeResponse(404, {"errorMessages": [f"no route {method} {path}"]})
+
+
+@pytest.fixture
+def jira(monkeypatch):
+    fake = FakeJira()
+
+    class Sess:
+        headers = {}
+        verify = True
+
+        def request(self, method, url, **kw):
+            return fake.request(method, url, **kw)
+
+    monkeypatch.setattr(jira_rest, "_session", lambda: Sess())
+    monkeypatch.setattr(jira_rest.secret_store, "get_secret", lambda name: "tok" if name == "jira_pat" else "")
+    monkeypatch.setattr(config, "_runtime_overrides", {})
+    return fake
+
+
+def test_enabled_only_with_token(jira, monkeypatch):
+    assert jira_rest.is_enabled()
+    monkeypatch.setitem(config._runtime_overrides, "jira_mode", "browser")
+    assert not jira_rest.is_enabled()
+
+
+def test_transition_by_name(jira):
+    jira_rest.transition_issue("TC-1", "pass")
+    method, path, kw = jira.calls[-1]
+    assert (method, path, kw["json"]) == ("POST", "/rest/api/2/issue/TC-1/transitions", {"transition": {"id": "21"}})
+
+
+def test_transition_missing_lists_available(jira):
+    with pytest.raises(jira_rest.JiraRestError, match="Start Progress, Pass"):
+        jira_rest.transition_issue("TC-1", "Fail")
+
+
+def test_fetch_test_execution_via_xray(jira):
+    te = jira_rest.fetch_test_execution("TE-5")
+    assert te["summary"] == "Exec 5"
+    assert te["test_cases"] == [{"key": "TC-1", "name": "TC-1 Login"}, {"key": "TC-2", "name": "TC-2 Logout"}]
+
+
+def test_create_defect_builds_fields(jira, tmp_path):
+    shot = tmp_path / "shot.png"
+    shot.write_bytes(b"png")
+    key = jira_rest.create_defect(
+        "Button overlaps", "desc", [str(shot)], assignee="Saurabh",
+        data={"scenario": "Login", "tc_key": "TC-1", "blocked_tcs": "2"},
+    )
+    assert key == "BDR-77"
+    f = jira.created
+    assert f["project"] == {"key": "BDR"} and f["issuetype"] == {"id": "42"}
+    assert f["components"] == [{"id": "10"}]
+    assert f["labels"] == ["Lightmode"]
+    assert f[jira_rest.FIELD_SEVERITY] == {"id": "1"}
+    assert f[jira_rest.FIELD_TCS_BLOCKED] == 2.0
+    assert f[jira_rest.FIELD_DEFECT_TYPE] == {"id": "41119", "child": {"id": "41813"}}
+    assert f["assignee"] == {"name": "sshukla"}
+    assert jira_rest.FIELD_USABILITY not in f  # not on the create screen
+    paths = [(m, p) for m, p, _ in jira.calls]
+    assert ("POST", "/rest/api/2/issueLink") in paths
+    assert ("POST", "/rest/api/2/issue/BDR-77/attachments") in paths
+
+
+def test_create_defect_drops_rejected_fields(jira):
+    jira.reject_fields = {jira_rest.FIELD_DEMO: True}
+    assert jira_rest.create_defect("t", "", [], data={}) == "BDR-77"
+    assert jira_rest.FIELD_DEMO not in jira.created
+
+
+def test_secret_never_persisted_in_overrides(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    stored = {}
+    monkeypatch.setattr(config.secret_store, "set_secret", lambda k, v: stored.__setitem__(k, v) or True)
+    import app as app_module
+    client = app_module.app.test_client()
+    res = client.post("/api/settings", json={"jira_pat": "secret-token", "project": "X"})
+    assert res.status_code == 200
+    assert stored == {"jira_pat": "secret-token"}
+    saved = json.loads((tmp_path / "settings_overrides.json").read_text())
+    assert "jira_pat" not in saved and saved["project"] == "X"

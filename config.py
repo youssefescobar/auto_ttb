@@ -3,16 +3,23 @@ import os
 import json
 from dotenv import load_dotenv
 
+import secret_store
+
 # Load environment variables from .env file if present
 load_dotenv()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_API_KEY = secret_store.get_secret("gemini_api_key")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # --- Jira connection -------------------------------------------------
 JIRA_BASE_URL = os.getenv("JIRA_BASE_URL", "https://jira.prod.mobily.lan").rstrip('/')   # no trailing slash
-JIRA_USERNAME = os.getenv("JIRA_USERNAME", "80129258")                   # domain login
+JIRA_USERNAME = os.getenv("JIRA_USERNAME", "")                   # domain login
 HEADLESS_BROWSER = False                           # Set False to watch Playwright execute
+
+# "auto": use the REST API when a Personal Access Token (JIRA_PAT) is set, else the browser.
+# "browser": always drive the Jira UI with Playwright.
+JIRA_MODE = os.getenv("JIRA_MODE", "auto")
+JIRA_PROJECT = os.getenv("JIRA_PROJECT", "")   # Jira project key, e.g. BDR (derived from DEFECT_BOILERPLATE if empty)
 
 # --- Project / CR Scope Settings ------------------------------------
 PROJECT_KEY = os.getenv("PROJECT_KEY", "JK26-3835")          
@@ -79,6 +86,8 @@ _KEY_MAPPING = {
     "gemini_api_key": "GEMINI_API_KEY",
     "gemini_model": "GEMINI_MODEL",
     "jira_base_url": "JIRA_BASE_URL",
+    "jira_mode": "JIRA_MODE",
+    "jira_project": "JIRA_PROJECT",
     "project_key": "PROJECT_KEY",
     "defect_title_prefix": "DEFECT_TITLE_PREFIX",
     "defect_title_pattern": "DEFECT_TITLE_PATTERN",
@@ -108,6 +117,8 @@ _KEY_MAPPING = {
 NETWORK_SPEED = "Normal" # Options: Fast, Normal, Slow, Very Slow
 
 def get(key, default=None):
+    if key in secret_store.SECRETS:
+        return secret_store.get_secret(key) or _runtime_overrides.get(key) or default
     if key in _runtime_overrides:
         val = _runtime_overrides[key]
     elif key in _KEY_MAPPING:
@@ -157,6 +168,13 @@ def load_persisted_overrides():
         if os.path.exists("settings_overrides.json"):
             with open("settings_overrides.json", "r", encoding="utf-8") as f:
                 _runtime_overrides.update(json.load(f))
+            # Move any secrets saved by older versions into the OS credential store
+            moved = [k for k in secret_store.SECRETS
+                     if _runtime_overrides.get(k) and secret_store.set_secret(k, _runtime_overrides[k])]
+            for k in moved:
+                _runtime_overrides.pop(k)
+            if moved:
+                persist_overrides()
     except Exception as e:
         print(f"[!] Error loading settings overrides: {e}")
 
