@@ -14,14 +14,6 @@
         <input name="jira_base_url" placeholder="https://jira.example.com" required>
         <small>Saving asks Chrome for access to this site only. The extension uses your normal Jira login; no token or password is stored.</small>
       </label>
-      <label>Transition on Pass
-        <input name="transition_pass">
-        <small>Xray executions set the test run to PASS / FAIL instead. This transition is only used for executions without Xray tests.</small>
-      </label>
-      <label>Transition on Fail
-        <input name="transition_fail">
-        <small>Only for executions without Xray tests. Leave empty to only mark the test case failed here.</small>
-      </label>
       <label class="check"><input type="checkbox" name="comment_evidence">
         Also add a Jira comment with the Actual screenshots when passing or failing
       </label>

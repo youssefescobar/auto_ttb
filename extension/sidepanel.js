@@ -4,11 +4,11 @@ import * as store from "./lib/store.js";
 import { buildPotBlob } from "./lib/pot.js";
 
 const $ = (id) => document.getElementById(id);
-const STATUSES = { pending: "Pending", pass: "Passed", fail: "Failed", blocked: "Blocked" };
+const STATUSES = { pending: "Pending", executing: "Executing", pass: "Passed", fail: "Failed", blocked: "Blocked" };
 const CATEGORIES = { expected: "Expected", actual: "Actual" };
 const ISSUE_KEY = /^[A-Z][A-Z0-9_]*-\d+$/;
-const TO_XRAY = { pass: "PASS", fail: "FAIL", blocked: "BLOCKED", pending: "TODO" };
-const FROM_XRAY = { PASS: "pass", FAIL: "fail", BLOCKED: "blocked" };
+const TO_XRAY = { pass: "PASS", fail: "FAIL", blocked: "BLOCKED", executing: "EXECUTING", pending: "TODO" };
+const FROM_XRAY = { PASS: "pass", FAIL: "fail", BLOCKED: "blocked", EXECUTING: "executing" };
 
 const state = {
   settings: null,
@@ -190,27 +190,10 @@ async function setStatus(tcKey, status) {
   }
   const done = [];
   try {
-    // Xray keeps the result on the test run, not the Test issue's workflow. Try it
-    // even when loading didn't list Xray tests, and only then fall back to a transition.
-    let xrayError = "";
-    try {
-      tc.run_id = await jira().setTestRunStatus(state.te.te_key, tcKey, TO_XRAY[status], tc.run_id);
-      await saveTe();
-      done.push(`Xray run set to ${TO_XRAY[status]}`);
-    } catch (e) {
-      if (e.status === 401 || state.te.xray) throw e;
-      xrayError = e.message;
-    }
-    if (xrayError) {
-      const transition = { pass: state.settings.transition_pass, fail: state.settings.transition_fail }[status];
-      if (!transition) throw new Error(`Xray: ${xrayError}`);
-      try {
-        await jira().transition(tcKey, transition);
-      } catch (e) {
-        throw new Error(`Xray: ${xrayError} Jira transition: ${e.message}`);
-      }
-      done.push(`transitioned to ${transition}`);
-    }
+    // Xray keeps the result on the test run inside the execution
+    tc.run_id = await jira().setTestRunStatus(state.te.te_key, tcKey, TO_XRAY[status], tc.run_id);
+    await saveTe();
+    done.push(`Xray run set to ${TO_XRAY[status]}`);
     if (state.settings.comment_evidence && ["pass", "fail"].includes(status)) {
       const evidence = state.shots.filter((s) => s.tc_key === tcKey && s.category === "actual");
       const text = [`Test ${label}${state.te.environment ? ` on ${state.te.environment}` : ""}.`, tc.note].filter(Boolean).join("\n");
@@ -307,6 +290,7 @@ function tcItem(tc) {
       h("button", { class: "pass", onclick: () => busy("pass", () => setStatus(tc.key, "pass")) }, "Pass"),
       h("button", { class: "fail", onclick: () => busy("fail", () => setStatus(tc.key, "fail")) }, "Fail"),
       h("button", { onclick: () => busy("blocked", () => setStatus(tc.key, "blocked")) }, "Blocked"),
+      h("button", { onclick: () => busy("executing", () => setStatus(tc.key, "executing")) }, "Executing"),
       tc.status !== "pending" ? h("button", { class: "link", onclick: () => busy("reset", () => setStatus(tc.key, "pending")) }, "Reset") : null,
       h("button", {
         class: "link danger", onclick: async () => {
@@ -350,7 +334,7 @@ function render() {
       h("p", { class: "counts" },
         h("span", { class: "pass-text" }, `${count("pass")} passed`), " · ",
         h("span", { class: "fail-text" }, `${count("fail")} failed`), " · ",
-        `${count("blocked")} blocked · ${count("pending")} pending`),
+        `${count("blocked")} blocked · ${count("executing")} executing · ${count("pending")} pending`),
       h("div", { class: "row" },
         h("button", { class: "primary", onclick: () => busy("pot", exportPot) }, "Download PoT"),
         h("button", { onclick: () => busy("refresh", () => loadFromJira(te.te_key)) }, "Refresh from Jira"),

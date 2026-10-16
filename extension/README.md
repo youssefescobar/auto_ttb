@@ -10,7 +10,7 @@ A Chrome/Edge side panel that replaces the local Python server. It runs inside y
   - uploading,
   - clicking **Capture tab**,
   - pressing **Alt+Shift+S**.
-- **Pass / Fail / Blocked**. Pass and Fail apply your Jira transitions. Optionally they also add a Jira comment with the Actual screenshots.
+- **Pass / Fail / Blocked / Executing** set the test run status in the Xray execution (PASS, FAIL, BLOCKED, EXECUTING; Reset sets TODO). Optionally Pass and Fail also add a Jira comment with the Actual screenshots.
 - Add a note and a linked defect key per test case.
 - **Download PoT** builds the Proof of Testing Word file in the browser, with the same layout as before.
 - Everything is stored in this browser profile (IndexedDB). Settings → Export backup saves it to a file.

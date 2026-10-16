@@ -65,18 +65,6 @@ export class Jira {
     return `${this.baseUrl}/browse/${encodeURIComponent(key)}`;
   }
 
-  async transition(issueKey, name) {
-    const data = await this.request("GET", `/rest/api/2/issue/${issueKey}/transitions`);
-    const wanted = name.trim().toLowerCase();
-    const list = data?.transitions || [];
-    const match = list.find((t) => (t.name || "").toLowerCase() === wanted || (t.to?.name || "").toLowerCase() === wanted);
-    if (!match) {
-      const available = list.map((t) => t.name).join(", ") || "none";
-      throw new JiraError(`Transition "${name}" is not available on ${issueKey} (available: ${available}).`);
-    }
-    await this.request("POST", `/rest/api/2/issue/${issueKey}/transitions`, { json: { transition: { id: match.id } } });
-  }
-
   // files: [{ name, blob }]
   async attach(issueKey, files) {
     const names = [];
