@@ -141,3 +141,13 @@ test("Mobily field names and option labels", () => {
   assert.deepEqual(fields.customfield_8, { id: "2" });
   assert.deepEqual(fields.customfield_9, { id: "3" });
 });
+
+test("For Project takes just the issue key", () => {
+  const m = { typeId: "1", fields: {
+    customfield_24115: { name: "For Project", schema: { type: "string" } },
+    customfield_2: { name: "For Project", schema: { type: "option" }, allowedValues: [{ id: "5", value: "JK26-3835 Technical project :\"B2B\"" }] },
+  } };
+  const s = { jira_project: "BDR", for_project: "JK26-3835 Technical project :\"B2B Digital Revamp\"", field_for_project: "customfield_24115" };
+  assert.equal(buildDefectFields(s, m, { title: "x" }).fields.customfield_24115, "JK26-3835");
+  assert.deepEqual(buildDefectFields({ ...s, field_for_project: "customfield_2" }, m, { title: "x" }).fields.customfield_2, { id: "5" });
+});

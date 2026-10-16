@@ -20,7 +20,7 @@ export const SECTIONS = [
   ["Defects", [
     ["jira_project", "Jira project key", "", "text", "Key defects are created in, e.g. BDR (\"B2B Digital Revamp (BDR)\" also works)"],
     ["defect_issue_type", "Issue type", "Defect", "text", ""],
-    ["for_project", "For Project", "", "text", "Issue key for the 'For Project' field, e.g. BDR-123"],
+    ["for_project", "For Project", "", "text", "Project issue key for the For Project field, e.g. JK26-3835"],
     ["demo", "Demo", "", "text", ""],
     ["components", "Component/s", "", "text", "Comma separated"],
     ["impacted_system", "Impacted system", "", "text", ""],

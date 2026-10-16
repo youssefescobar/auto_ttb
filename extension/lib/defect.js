@@ -53,6 +53,8 @@ function matchOption(allowed, value) {
   return opts.find((o) => ["value", "name", "key"].some((k) => label(o, k).trim().toLowerCase() === v))
     // "BDR Android" still finds "BDR-ANDROID"
     || opts.find((o) => ["value", "name"].some((k) => norm(label(o, k)) && norm(label(o, k)) === norm(value)))
+    // "JK26-3835" finds "JK26-3835 Technical project: …"
+    || opts.find((o) => /-\d+$/.test(v) && (label(o, "value") || label(o, "name")).trim().toLowerCase().startsWith(v + " "))
     // "Medium" finds "2-Medium"
     || opts.find((o) => norm(value) && norm(label(o, "value") || label(o, "name")).replace(/^\d+/, "") === norm(value))
     || null;
@@ -138,7 +140,8 @@ export function applyTitlePattern(settings, { aiTitle, teKey, tcKey }) {
 // Returns { fields, skipped: ["reason", ...] } ready for Jira.createIssue (assignee resolved separately).
 export function buildDefectFields(settings, meta, draft) {
   const wanted = [
-    ["field_for_project", settings.for_project],
+    // Jira wants just the key: "JK26-3835 Technical project: …" → "JK26-3835"
+    ["field_for_project", String(settings.for_project || "").match(/[A-Za-z][A-Za-z0-9_]*-\d+/)?.[0]?.toUpperCase() || settings.for_project],
     ["field_demo", settings.demo],
     ["components", settings.components],
     ["field_severity", draft.severity || settings.priority],
