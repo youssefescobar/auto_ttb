@@ -128,7 +128,7 @@ async function loadFromJira(teKey) {
     const xrayStatus = FROM_XRAY[tc.xray_status];
     if (xrayStatus && item.status === "pending") item.status = xrayStatus;
   }
-  Object.assign(existing, { summary: fetched.summary, url: fetched.url, xray: fetched.xray, test_cases: [...byKey.values()] });
+  Object.assign(existing, { summary: fetched.summary, url: fetched.url, xray: fetched.xray, xray_error: fetched.xray_error, test_cases: [...byKey.values()] });
   await store.saveTe(existing);
   if (!fetched.test_cases.length) toast(`${fetched.te_key} has no linked test cases in Jira. Add them below.`, "error");
   else toast(`Loaded ${fetched.test_cases.length} test cases from ${fetched.te_key}.`);
@@ -190,17 +190,26 @@ async function setStatus(tcKey, status) {
   }
   const done = [];
   try {
-    if (state.te.xray) {
-      // Xray executions: the result goes on the test run, not the Test issue's workflow
+    // Xray keeps the result on the test run, not the Test issue's workflow. Try it
+    // even when loading didn't list Xray tests, and only then fall back to a transition.
+    let xrayError = "";
+    try {
       tc.run_id = await jira().setTestRunStatus(state.te.te_key, tcKey, TO_XRAY[status], tc.run_id);
       await saveTe();
       done.push(`Xray run set to ${TO_XRAY[status]}`);
-    } else {
+    } catch (e) {
+      if (e.status === 401 || state.te.xray) throw e;
+      xrayError = e.message;
+    }
+    if (xrayError) {
       const transition = { pass: state.settings.transition_pass, fail: state.settings.transition_fail }[status];
-      if (transition) {
+      if (!transition) throw new Error(`Xray: ${xrayError}`);
+      try {
         await jira().transition(tcKey, transition);
-        done.push(`transitioned to ${transition}`);
+      } catch (e) {
+        throw new Error(`Xray: ${xrayError} Jira transition: ${e.message}`);
       }
+      done.push(`transitioned to ${transition}`);
     }
     if (state.settings.comment_evidence && ["pass", "fail"].includes(status)) {
       const evidence = state.shots.filter((s) => s.tc_key === tcKey && s.category === "actual");
@@ -336,6 +345,7 @@ function render() {
     h("div", { class: "te-head" },
       h("h2", {}, te.url ? h("a", { href: te.url, target: "_blank" }, te.te_key) : te.te_key),
       te.summary ? h("p", { class: "muted" }, te.summary) : null,
+      te.xray === false ? h("p", { class: "warn", title: te.xray_error || "" }, `Xray didn't list this execution's tests (${te.xray_error || "no details"}), so test cases came from its links.`) : null,
       h("div", { class: "row" }, selectFor("environment", splitList(state.settings.environments)), selectFor("language", splitList(state.settings.languages))),
       h("p", { class: "counts" },
         h("span", { class: "pass-text" }, `${count("pass")} passed`), " · ",
@@ -415,6 +425,7 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
 window.addEventListener("focus", () => state.settings && checkJira());
 
 async function init() {
+  $("app-name").title = `Version ${chrome.runtime.getManifest().version}`;
   state.settings = await getSettings();
   checkJira();
   await refreshTeList();

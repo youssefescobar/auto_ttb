@@ -108,13 +108,14 @@ export class Jira {
     return out;
   }
 
-  // Returns { te_key, summary, url, xray, test_cases: [{ key, summary, run_id?, xray_status? }] }.
+  // Returns { te_key, summary, url, xray, xray_error, test_cases: [{ key, summary, run_id?, xray_status? }] }.
   // Tries Xray's Test Execution API, then the issue's links and sub-tasks.
   async fetchTestExecution(teKey) {
     const te = teKey.toUpperCase();
     const issue = await this.request("GET", `/rest/api/2/issue/${te}`, { params: { fields: "summary,issuelinks,subtasks" } });
     const fields = issue?.fields || {};
     const runs = {}; // test key -> { run_id, xray_status }
+    let xrayError = "";
     try {
       const tests = await this.request("GET", `/rest/raven/1.0/api/testexec/${te}/test`);
       for (const t of tests || []) {
@@ -122,6 +123,7 @@ export class Jira {
       }
     } catch (e) {
       if (e.status === 401) throw e; // anything else: Xray missing or not a Test Execution
+      xrayError = e.message;
     }
     const xray = Object.keys(runs).length > 0;
     let keys = Object.keys(runs);
@@ -139,6 +141,7 @@ export class Jira {
       summary: fields.summary || "",
       url: this.issueUrl(te),
       xray,
+      xray_error: xray ? "" : xrayError || "Xray returned no tests for this issue.",
       test_cases: keys.map((k) => ({ key: k, summary: names[k] || "", ...runs[k] })),
     };
   }
