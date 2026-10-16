@@ -93,3 +93,10 @@ test("Gemini errors are readable", async () => {
   const fetch = async () => ({ ok: false, status: 400, json: async () => ({ error: { message: "API key not valid" } }) });
   await assert.rejects(draftDefect({ apiKey: "k", notes: "x" }, fetch), /API key not valid/);
 });
+
+test("project key from the name Jira displays", async () => {
+  const { projectKey } = await import("../lib/settings.js");
+  assert.equal(projectKey("B2B Digital Revamp (BDR)"), "BDR");
+  assert.equal(projectKey(" bdr "), "BDR");
+  assert.equal(projectKey(""), "");
+});

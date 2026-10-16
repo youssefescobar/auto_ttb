@@ -1,4 +1,4 @@
-import { SECTIONS, getSettings, originOf, saveSettings, normaliseBaseUrl } from "./lib/settings.js";
+import { SECTIONS, getSettings, originOf, saveSettings, normaliseBaseUrl, projectKey } from "./lib/settings.js";
 import { Jira } from "./lib/jira.js";
 import { detectCustomFields } from "./lib/defect.js";
 import { GEMINI_ORIGIN } from "./lib/ai.js";
@@ -71,6 +71,7 @@ function readForm() {
     else if (type === "secret") values[key] = input.value.trim() || current[key] || "";
     else values[key] = input.value.trim();
   }
+  values.jira_project = projectKey(values.jira_project);
   return values;
 }
 

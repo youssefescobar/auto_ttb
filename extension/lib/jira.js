@@ -141,13 +141,13 @@ export class Jira {
   // Returns { typeId, fields: { fieldId: meta } } for the project's create screen.
   async createMeta(projectKey, issueType) {
     try {
-      const types = await this.request("GET", `/rest/api/2/issue/createmeta/${projectKey}/issuetypes`);
+      const types = await this.request("GET", `/rest/api/2/issue/createmeta/${encodeURIComponent(projectKey)}/issuetypes`);
       const list = types?.values || (Array.isArray(types) ? types : []);
       const it = list.find((t) => (t.name || "").toLowerCase() === issueType.toLowerCase());
       if (!it) throw new JiraError(`Issue type "${issueType}" not found in project ${projectKey} (available: ${list.map((t) => t.name).join(", ") || "none"}).`);
       const fields = {};
       for (let start = 0; ;) {
-        const page = await this.request("GET", `/rest/api/2/issue/createmeta/${projectKey}/issuetypes/${it.id}`, { params: { startAt: String(start), maxResults: "100" } });
+        const page = await this.request("GET", `/rest/api/2/issue/createmeta/${encodeURIComponent(projectKey)}/issuetypes/${it.id}`, { params: { startAt: String(start), maxResults: "100" } });
         const values = page?.values || [];
         for (const f of values) fields[f.fieldId] = f;
         start += values.length;

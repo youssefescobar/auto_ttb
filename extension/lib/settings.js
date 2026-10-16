@@ -18,7 +18,7 @@ export const SECTIONS = [
     ["share_screenshots_with_ai", "Send screenshots to Gemini (otherwise only your notes are sent)", true, "bool", ""],
   ]],
   ["Defects", [
-    ["jira_project", "Jira project key", "", "text", "Key defects are created in, e.g. BDR"],
+    ["jira_project", "Jira project key", "", "text", "Key defects are created in, e.g. BDR (\"B2B Digital Revamp (BDR)\" also works)"],
     ["defect_issue_type", "Issue type", "Defect", "text", ""],
     ["for_project", "For Project", "", "text", "Issue key for the 'For Project' field, e.g. BDR-123"],
     ["demo", "Demo", "", "text", ""],
@@ -75,7 +75,15 @@ export async function getSettings() {
     if (k in DEFAULTS && v !== "" && v !== undefined && v !== null) out[k] = v;
   }
   out.jira_base_url = normaliseBaseUrl(out.jira_base_url);
+  out.jira_project = projectKey(out.jira_project);
   return out;
+}
+
+// "B2B Digital Revamp (BDR)" (the project as Jira displays it) -> "BDR"
+export function projectKey(value) {
+  const v = String(value || "").trim();
+  const m = v.match(/\(([A-Za-z][A-Za-z0-9_]*)\)\s*$/);
+  return (m ? m[1] : v).toUpperCase();
 }
 
 export async function saveSettings(values) {
