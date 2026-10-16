@@ -6,6 +6,4 @@ db.json
 jira_session.json
 settings_overrides.json
 settings_history.json
-user_story.xlsx
-user_story_sample.json
 __pycache__/
