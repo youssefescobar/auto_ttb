@@ -65,7 +65,7 @@ There is no setup script and nothing company-specific is built in. Start the web
 python app.py
 ```
 
-The app sends you to the Config page until the Jira base URL is set. Everything lives there: Jira URL, token and mode, Gemini key and model, project and defect field values, title pattern, the pass transition, and (under the collapsed *Advanced* sections) browser-mode options and the Jira custom field IDs. Secrets (Jira token, Gemini key) go to the OS credential store; everything else is saved to `settings_overrides.json`. Values in an existing `.env` are still read as a fallback.
+The app sends you to the Config page until the Jira base URL is set. Everything lives there: Jira URL, token and mode, Gemini key and model, project and defect field values, title pattern, the pass transition, and (under the collapsed *Advanced* sections) browser-mode options and the Jira custom field IDs. Everything, including the Jira token and Gemini key, is saved to `settings_overrides.json` (git-ignored; treat it like a password file). Values in an existing `.env` are still read as a fallback.
 
 ---
 
@@ -74,7 +74,7 @@ The app sends you to the Config page until the Jira base URL is set. Everything 
 Jira actions use the Jira REST API, signed in one of two ways:
 
 - **Your Jira login (no token needed).** Click **Login to Jira** in the top bar, log in as usual in the window that opens, then **Save Jira Session**. The app sends that saved login (`jira_session.json`) to the REST API. When it expires, the top bar shows *Jira login expired*: log in again. Treat `jira_session.json` like a password.
-- **Personal Access Token (optional).** If your Jira offers *Profile → Personal Access Tokens*, enter one on the Config page. It is stored in the OS credential store (Windows Credential Manager / macOS Keychain), never in a project file, and is used instead of the saved login.
+- **Personal Access Token (optional).** If your Jira offers *Profile → Personal Access Tokens*, enter one on the Config page. It is used instead of the saved login.
 
 Either way:
 

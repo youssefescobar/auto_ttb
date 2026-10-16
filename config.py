@@ -1,9 +1,9 @@
 """
 All app settings live here and are edited on the web app's Config page (/config).
 
-Values are read at call time with `config.get(key)`: secrets from the OS credential
-store, everything else from settings saved on the Config page (settings_overrides.json),
-falling back to the default below when a setting is unset or empty.
+Values are read at call time with `config.get(key)` from the settings saved on the
+Config page (settings_overrides.json), falling back to the default below when a
+setting is unset or empty.
 
 No company, project or Jira-instance values are built in: those defaults are empty.
 Only generic behaviour (timeouts, Jira's standard transition names, ...) has a default.
@@ -12,9 +12,10 @@ import os
 import json
 from dotenv import load_dotenv
 
-import secret_store
+load_dotenv()  # JIRA_PAT / GEMINI_API_KEY env vars are a fallback for the secrets below
 
-load_dotenv()  # secret_store falls back to JIRA_PAT / GEMINI_API_KEY env vars
+# Secret settings -> environment variable fallback. Never sent back to the browser.
+SECRETS = {"jira_pat": "JIRA_PAT", "gemini_api_key": "GEMINI_API_KEY"}
 
 # Local file paths (not user settings)
 EXECUTIONS_DIR = "executions"
@@ -26,7 +27,7 @@ SECTIONS = [
     ("Jira connection", [
         ("jira_base_url", "Jira base URL", "", "text", "e.g. https://jira.example.com"),
         ("jira_pat", "Jira Personal Access Token", "", "secret",
-         "Jira → Profile → Personal Access Tokens. Kept in the OS credential store, never in a file. "
+         "Jira → Profile → Personal Access Tokens. "
          "Optional: without one, the app uses your saved Jira login (Login button) for the REST API."),
         ("jira_mode", "Connection mode", "auto", "select:auto|browser",
          "auto = REST API using your token, or your saved Jira login if no token; browser = always drive the Jira page"),
@@ -34,7 +35,7 @@ SECTIONS = [
          "Only if Jira uses an internal certificate authority"),
     ]),
     ("AI (Gemini)", [
-        ("gemini_api_key", "Gemini API key", "", "secret", "Kept in the OS credential store"),
+        ("gemini_api_key", "Gemini API key", "", "secret", ""),
         ("gemini_model", "Gemini model", "gemini-2.5-flash", "text", ""),
         ("share_screenshots_with_ai", "Share screenshots with AI", True, "bool",
          "When off, only text notes go to Gemini"),
@@ -122,8 +123,8 @@ _runtime_overrides = {}
 
 def get(key, default=None):
     key = _ALIASES.get(key, key)
-    if key in secret_store.SECRETS:
-        return secret_store.get_secret(key) or default
+    if key in SECRETS:
+        return _runtime_overrides.get(key) or os.getenv(SECRETS[key], "") or default
     val = _runtime_overrides.get(key, "")
     if val == "":  # unset or emptied on the Config page
         val = DEFAULTS.get(key, default)
@@ -153,9 +154,9 @@ def set_overrides(overrides_dict):
 
 def get_all_settings():
     """Every non-secret setting; secrets are reported only as set / not set."""
-    settings = {k: get(k) for k in DEFAULTS if k not in secret_store.SECRETS}
-    for k in secret_store.SECRETS:
-        settings[f"{k}_set"] = bool(secret_store.get_secret(k))
+    settings = {k: get(k) for k in DEFAULTS if k not in SECRETS}
+    for k in SECRETS:
+        settings[f"{k}_set"] = bool(get(k))
     return settings
 
 
@@ -172,12 +173,7 @@ def load_persisted_overrides():
                 saved = json.load(f)
             for key, value in saved.items():
                 _runtime_overrides[_ALIASES.get(key, key)] = value
-            # Move any secrets saved by older versions into the OS credential store
-            moved = [k for k in secret_store.SECRETS
-                     if _runtime_overrides.get(k) and secret_store.set_secret(k, _runtime_overrides[k])]
-            for k in moved:
-                _runtime_overrides.pop(k)
-            if moved or saved.keys() != _runtime_overrides.keys():
+            if saved.keys() != _runtime_overrides.keys():
                 persist_overrides()
     except Exception as e:
         print(f"[!] Error loading settings overrides: {e}")

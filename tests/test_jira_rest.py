@@ -110,10 +110,10 @@ def jira(monkeypatch):
             return fake.request(method, url, **kw)
 
     monkeypatch.setattr(jira_rest, "_session", lambda: Sess())
-    monkeypatch.setattr(jira_rest.secret_store, "get_secret", lambda name: "tok" if name == "jira_pat" else "")
+    monkeypatch.delenv("JIRA_PAT", raising=False)
     field_ids = {k: cf(k) for k in config.DEFAULTS if k.startswith("field_")}
     monkeypatch.setattr(config, "_runtime_overrides", {
-        "jira_base_url": "https://jira.test", "jira_project": "BDR", "defect_issue_type": "Defect",
+        "jira_base_url": "https://jira.test", "jira_pat": "tok", "jira_project": "BDR", "defect_issue_type": "Defect",
         "components": "Android", "defect_type": "B2B Digital Revamp", "filed_against": "BDR-ANDROID",
         "defect_environment": "Integration", "labels": "Lightmode", "priority": "1-Low", "demo": "Demo 1",
         "usability_issue": "No", **field_ids,
@@ -172,17 +172,17 @@ def test_create_defect_drops_rejected_fields(jira):
     assert cf(jira_rest.FIELD_DEMO) not in jira.created
 
 
-def test_secret_never_persisted_in_overrides(monkeypatch, tmp_path):
+def test_secret_saved_but_never_sent_back(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    stored = {}
-    monkeypatch.setattr(config.secret_store, "set_secret", lambda k, v: stored.__setitem__(k, v) or True)
+    monkeypatch.setattr(config, "_runtime_overrides", {})
     import app as app_module
     client = app_module.app.test_client()
     res = client.post("/api/settings", json={"jira_pat": "secret-token", "project": "X"})
     assert res.status_code == 200
-    assert stored == {"jira_pat": "secret-token"}
     saved = json.loads((tmp_path / "settings_overrides.json").read_text())
-    assert "jira_pat" not in saved and saved["project"] == "X"
+    assert saved["jira_pat"] == "secret-token" and saved["project"] == "X"
+    settings = client.get("/api/settings").json
+    assert "jira_pat" not in settings and settings["jira_pat_set"] is True
 
 
 def test_field_without_id_is_skipped(jira, monkeypatch):
@@ -219,7 +219,7 @@ def saved_login(monkeypatch, tmp_path):
         {"name": "other", "value": "x", "domain": "example.com", "path": "/"},
     ]}))
     monkeypatch.setattr(config, "BROWSER_STATE_PATH", str(state))
-    monkeypatch.setattr(jira_rest.secret_store, "get_secret", lambda name: "")
+    monkeypatch.delenv("JIRA_PAT", raising=False)
     monkeypatch.setattr(config, "_runtime_overrides", {"jira_base_url": "https://jira.test"})
     return state
 
@@ -235,7 +235,7 @@ def test_saved_login_used_when_no_token(saved_login):
 
 
 def test_token_preferred_over_saved_login(saved_login, monkeypatch):
-    monkeypatch.setattr(jira_rest.secret_store, "get_secret", lambda name: "tok" if name == "jira_pat" else "")
+    monkeypatch.setitem(config._runtime_overrides, "jira_pat", "tok")
     assert jira_rest.auth_mode() == "token"
     assert jira_rest._session().headers["Authorization"] == "Bearer tok"
 
