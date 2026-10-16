@@ -391,6 +391,7 @@ async function viewDefect(tcKey) {
   hide($('#tc-grid-section'));
   hide($('#tc-detail-section'));
   show($('#defect-preview-section'));
+  refreshTestDataOptions();
   
   if (state.linkedTeEnabled && state.linkedTeKey) {
     show($('#defect-bilingual-toggle-container'));
@@ -1033,6 +1034,7 @@ async function failTC() {
 
   hide($('#tc-detail-section'));
   show($('#defect-preview-section'));
+  refreshTestDataOptions();
   
   if (state.linkedTeEnabled && state.linkedTeKey) {
     show($('#defect-bilingual-toggle-container'));
@@ -1041,6 +1043,38 @@ async function failTC() {
   }
 
   setBilingualContext(state.activeContext);
+}
+
+// Test data is remembered per TE environment (e.g. SIT, Prod) in settings history.
+function testDataKey() {
+  return `test_data:${$('#te-env-select')?.value || 'Unknown'}`;
+}
+
+async function refreshTestDataOptions() {
+  const select = $('#defect-test-data-saved');
+  if (!select) return;
+  const env = $('#te-env-select')?.value || 'Unknown';
+  $('#test-data-env').textContent = `(${env})`;
+  let saved = [];
+  try {
+    saved = (await api('GET', '/api/settings-history'))[testDataKey()] || [];
+  } catch (e) {}
+  select.innerHTML = '';
+  select.add(new Option(saved.length ? `Saved ${env} test data…` : `No saved ${env} test data yet`, ''));
+  for (const value of saved) {
+    const opt = new Option(value.length > 60 ? value.slice(0, 60) + '…' : value, value);
+    opt.title = value;
+    select.add(opt);
+  }
+  select.disabled = !saved.length;
+}
+
+async function rememberTestData() {
+  const value = $('#defect-test-data').value.trim();
+  if (!value) return;
+  try {
+    await api('POST', '/api/settings-history', { [testDataKey()]: value });
+  } catch (e) {}
 }
 
 /** Populate defect form fields from a draft object */
@@ -1196,6 +1230,7 @@ async function submitDefect() {
 
     saveExecutionState();
     delete state.defectDrafts[state.currentTC];
+    rememberTestData();
     const potMsg = res.saved_pot ? ' and saved to POT!' : '!';
     showToast(`❌ Defect ${res.issue_key} created${potMsg}`, 'success');
     
@@ -1253,6 +1288,7 @@ async function saveAsDraft() {
     };
 
     await api('POST', '/api/save-draft', payload);
+    rememberTestData();
     tc.status = 'fail';
     tc.draft_defect = payload;
     saveExecutionState();
@@ -1342,6 +1378,7 @@ function editDraft(idx) {
   hide($('#tc-grid-section'));
   hide($('#tc-detail-section'));
   show($('#defect-preview-section'));
+  refreshTestDataOptions();
 
   populateDefectForm({
     title: draft.draft?.title || '',
@@ -1786,6 +1823,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnRebuildPot = $('#btn-rebuild-pot');
   if (btnRebuildPot) btnRebuildPot.addEventListener('click', generatePOT);
 
+  $('#defect-test-data-saved')?.addEventListener('change', (e) => {
+    if (!e.target.value) return;
+    $('#defect-test-data').value = e.target.value;
+    e.target.value = '';
+  });
+
   const envSelect = $('#te-env-select');
   if (envSelect) {
     envSelect.addEventListener('change', async (e) => {
@@ -1793,6 +1836,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         await api('POST', '/api/update-te-env', { te_key: state.teKey, environment: e.target.value });
         showToast(`Environment updated to ${e.target.value}`, 'success');
+        refreshTestDataOptions();
       } catch (err) {
         showToast('Failed to update environment', 'error');
       }

@@ -739,3 +739,5 @@ details.config-section > summary h2 { display: inline; }
 details.config-section[open] > summary { margin-bottom: 1rem; }
 .config-banner { margin-bottom: 2rem; padding: 0.75rem 1rem; border: 1px solid var(--amber); border-radius: var(--radius-sm); color: var(--amber); }
 .config-actions { position: sticky; bottom: 0; padding: 1rem 0; background: var(--bg); border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
+
+.test-data-saved { margin-bottom: 0.4rem; }
