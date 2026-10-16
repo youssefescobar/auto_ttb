@@ -3,7 +3,7 @@ import { Jira, parseIssueKey } from "./lib/jira.js";
 import * as store from "./lib/store.js";
 import { buildPotBlob } from "./lib/pot.js";
 import { draftDefect } from "./lib/ai.js";
-import { applyTitlePattern, buildDefectFields, optionsFor } from "./lib/defect.js";
+import { applyTitlePattern, buildDefectFields, metaFieldFor, optionsFor } from "./lib/defect.js";
 
 const $ = (id) => document.getElementById(id);
 const STATUSES = { pending: "Pending", executing: "Executing", pass: "Passed", fail: "Failed", blocked: "Blocked" };
@@ -386,7 +386,7 @@ function defectEditor(tc) {
     el.addEventListener("change", async () => { d[key] = el.value; await save(); });
     return el;
   };
-  const severityOptions = optionsFor(state.meta?.fields, state.settings.field_severity);
+  const severityOptions = state.meta ? optionsFor(metaFieldFor(state.meta, "field_severity")) : [];
   const severity = severityOptions.length
     ? bind("severity", h("select", {}, h("option", { value: "" }, "—"), severityOptions.map((o) => h("option", { value: o, selected: o === d.severity }, o))))
     : bind("severity", h("input", { value: d.severity || "" }));

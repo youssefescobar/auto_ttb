@@ -133,3 +133,8 @@ header strong { flex: 1; font-size: 15px; letter-spacing: .2px; }
 /* Settings page */
 form details > summary { cursor: pointer; font-weight: 600; margin: 10px 0; }
 .sticky-save { position: sticky; bottom: 0; background: var(--bg); padding: 10px 0; border-top: 1px solid var(--line); }
+.checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0 10px; margin-top: 4px; }
+.checks label { margin: 2px 0; }
+label > small { display: block; font-weight: 400; margin-top: 2px; }
+label > select { display: block; width: 100%; }
+.checks + small { display: none; }

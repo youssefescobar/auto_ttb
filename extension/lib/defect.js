@@ -27,6 +27,31 @@ export const FIELD_NAMES = {
   field_epic: ["BDR_EPIC", "BDR Epic"],
 };
 
+// Settings → Defects keys whose choices come from a create screen field.
+export const SETTING_FIELDS = {
+  demo: "field_demo",
+  components: "components",
+  impacted_system: "field_impacted_system",
+  defect_type: "field_defect_type",
+  defect_environment: "field_environment",
+  defect_phase: "field_phase",
+  priority: "field_severity",
+  usability_issue: "field_usability",
+  re_occurrence: "field_reoccurrence",
+  newstack_impact: "field_newstack",
+  defect_category: "field_category",
+  milestone_type: "field_milestone",
+  uat_priority: "field_uat_priority",
+  epic: "field_epic",
+};
+
+// The create screen field behind a settings key or field_* key, or undefined.
+export function metaFieldFor(meta, key) {
+  const fieldKey = SETTING_FIELDS[key] || key;
+  const id = fieldKey.startsWith("field_") ? detectCustomFields(meta.fields).found[fieldKey] : fieldKey;
+  return id ? meta.fields[id] : undefined;
+}
+
 const norm = (name) => String(name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
 // Matches the create screen's custom fields to field_* settings by name.
@@ -60,7 +85,7 @@ function matchOption(allowed, value) {
     || null;
 }
 
-const optionLabels = (opts) => (opts || []).map((o) => o.value ?? o.name).filter(Boolean);
+export const optionLabels = (opts) => (opts || []).map((o) => o.value ?? o.name).filter(Boolean);
 
 const splitComma = (v) => (Array.isArray(v) ? v : String(v).split(",")).map((x) => String(x).trim()).filter(Boolean);
 
@@ -110,8 +135,8 @@ export function formatValue(meta, value) {
 }
 
 // Allowed values of a field (for pickers), or [] when it's free text.
-export function optionsFor(metaFields, fieldId) {
-  return optionLabels(metaFields?.[fieldId]?.allowedValues);
+export function optionsFor(field) {
+  return optionLabels(field?.allowedValues);
 }
 
 export function buildDescription(d) {
@@ -174,17 +199,15 @@ export function buildDefectFields(settings, meta, draft) {
   if (description && "description" in meta.fields) fields.description = description;
 
   const skipped = [];
-  const detected = detectCustomFields(meta.fields).found; // fallback for IDs not set in Settings
+  const detected = detectCustomFields(meta.fields).found;
   for (const [key, value] of wanted) {
-    // A saved ID that isn't on this create screen (e.g. imported from another project) loses to the detected one
-    const id = !key.startsWith("field_") ? key : meta.fields[settings[key]] ? settings[key] : detected[key] || settings[key];
+    const id = key.startsWith("field_") ? detected[key] : key;
     if (key === "field_defect_type" && id && meta.fields[id] && !settings.defect_type) {
       throw new Error(`${meta.fields[id].name || "Defect type"} needs both values: set Settings → Defects → Defect type and Filed against.`);
     }
     if (value === undefined || value === null || value === "" || (Array.isArray(value) && !value.length)) continue;
-    if (!id) continue;
-    if (!meta.fields[id]) {
-      skipped.push(`${id} (not on the create screen)`);
+    if (!id || !meta.fields[id]) {
+      skipped.push(`${FIELD_NAMES[key]?.[0] || id} (not on the create screen)`);
       continue;
     }
     const formatted = formatValue(meta.fields[id], value);
@@ -196,10 +219,7 @@ export function buildDefectFields(settings, meta, draft) {
   }
   const missing = Object.entries(meta.fields)
     .filter(([id, m]) => m.required && !m.hasDefaultValue && !(id in fields) && !["attachment", "issuelinks", "reporter", "assignee"].includes(id))
-    .map(([id, m]) => {
-      const key = Object.keys(FIELD_NAMES).find((k) => settings[k] === id);
-      return `${m.name || id}${key ? "" : ` (${id}; set its ID in Settings → Advanced)`}`;
-    });
+    .map(([id, m]) => m.name || id);
   if (missing.length) throw new Error(`Jira requires these fields, but they have no value in Settings → Defects: ${missing.join(", ")}.`);
   return { fields, skipped };
 }

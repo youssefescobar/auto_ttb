@@ -13,7 +13,7 @@ A Chrome/Edge side panel (it replaced the old local Python server). It runs insi
 - **Pass / Fail / Blocked / Executing** set the test run status in the Xray execution (PASS, FAIL, BLOCKED, EXECUTING; Reset sets TODO). Optionally Pass and Fail also add a Jira comment with the Actual screenshots.
 - Add a note and a linked defect key per test case.
 - **Download PoT** builds the Proof of Testing Word file in the browser, with the same layout as before.
-- Everything is stored in this browser profile (IndexedDB). Settings → Export backup saves it to a file. Settings → Old app data imports the Python app's `db.json` and `executions` folder.
+- Everything is stored in this browser profile (IndexedDB). Settings → Export backup saves it to a file.
 - PoT files are not stored anywhere: **Download PoT** at the top of an open test execution builds the file from what's saved and puts it in your browser's Downloads folder as `PoT_<TE>.docx`.
 
 ### Defects
@@ -22,7 +22,7 @@ A Chrome/Edge side panel (it replaced the old local Python server). It runs insi
 - **Create in Jira** creates the defect with your project's fields (Settings → Defects), links it to the test case, attaches the screenshots, marks the Xray run FAIL and adds the defect to it.
 - **Add to queue** keeps the draft; **Create all in Jira** at the top files every queued draft in one go.
 - **Check duplicates** lists open defects in the project with similar words; **Use this** links an existing one instead of filing a new one.
-- Settings → **Detect field IDs from Jira** fills the custom field IDs from your Defect create screen.
+- Settings → Defects shows dropdowns filled from your project's Defect create screen. The extension finds Jira's custom fields by name, so there are no field IDs to set.
 
 Still to come: the click recorder (step 3).
 

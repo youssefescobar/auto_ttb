@@ -1,7 +1,6 @@
 // Settings live in chrome.storage.local under one key and are edited on the options page.
 
 // [key, label, default, type, help]. Types: text, secret, bool, textarea.
-// Sections titled "Advanced: ..." start collapsed on the options page.
 export const SECTIONS = [
   ["Jira", [
     ["jira_base_url", "Jira base URL", "", "text",
@@ -40,29 +39,6 @@ export const SECTIONS = [
     ["epic", "BDR_EPIC", "", "text", "e.g. Font & Family Light Mode"],
     ["defect_title_prefix", "Title prefix", "", "text", ""],
     ["defect_title_pattern", "Title pattern", "{AI_TITLE}", "text", "Placeholders: {PREFIX} {TE_KEY} {TC_KEY} {AI_TITLE}"],
-  ]],
-  ["Advanced: Jira custom field IDs", [
-    ["field_for_project", "For Project", "", "text", "Use Detect to fill these from your Defect create screen"],
-    ["field_demo", "Demo", "", "text", ""],
-    ["field_severity", "Defect severity", "", "text", ""],
-    ["field_tcs_blocked", "Test cases blocked", "", "text", ""],
-    ["field_impacted_system", "Impacted system", "", "text", ""],
-    ["field_scenario", "Scenario", "", "text", ""],
-    ["field_expected", "Expected result", "", "text", ""],
-    ["field_actual", "Actual result", "", "text", ""],
-    ["field_steps", "Steps to recreate", "", "text", ""],
-    ["field_qa_analysis", "QA analysis", "", "text", ""],
-    ["field_test_data", "Test data", "", "text", ""],
-    ["field_defect_type", "Defect type → Filed against (cascading)", "", "text", ""],
-    ["field_environment", "Defect environment", "", "text", ""],
-    ["field_phase", "Defect phase", "", "text", ""],
-    ["field_usability", "Usability issue", "", "text", ""],
-    ["field_reoccurrence", "Re-occurrence", "", "text", ""],
-    ["field_newstack", "NewStack impact", "", "text", ""],
-    ["field_category", "Defect category", "", "text", ""],
-    ["field_milestone", "Milestone type", "", "text", ""],
-    ["field_uat_priority", "UAT priority", "", "text", ""],
-    ["field_epic", "BDR_EPIC", "", "text", ""],
   ]],
 ];
 

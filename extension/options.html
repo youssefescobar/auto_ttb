@@ -11,30 +11,19 @@
     <div id="fields"></div>
     <div class="row sticky-save">
       <button type="submit" class="primary">Save</button>
-      <button type="button" id="detect">Detect field IDs from Jira</button>
       <span id="status" class="muted"></span>
     </div>
   </form>
 
   <section>
     <h2>Backup</h2>
-    <p class="muted">Test executions and screenshots are stored in this browser profile only. Export a backup before clearing browser data or moving to another laptop. "Import old app settings" reads the Python app's settings_overrides.json into this form; review it, then Save.</p>
+    <p class="muted">Test executions and screenshots are stored in this browser profile only. Export a backup before clearing browser data or moving to another laptop.</p>
     <div class="row">
       <button id="export">Export backup</button>
       <label class="button">Import backup<input id="import" type="file" accept="application/json" hidden></label>
-      <label class="button">Import old app settings<input id="import-old" type="file" accept="application/json" hidden></label>
     </div>
   </section>
 
-  <section>
-    <h2>Old app data</h2>
-    <p class="muted">Brings over the Python app's test executions, then their screenshots. Test executions already in the extension are kept and only filled in.</p>
-    <div class="row">
-      <label class="button">1. Import db.json<input id="import-db" type="file" accept="application/json" hidden></label>
-      <label class="button">2. Import executions folder<input id="import-shots" type="file" webkitdirectory hidden></label>
-    </div>
-    <p id="legacy-status" class="muted"></p>
-  </section>
   <script type="module" src="options.js"></script>
 </body>
 </html>
