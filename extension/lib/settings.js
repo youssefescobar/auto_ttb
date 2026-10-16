@@ -37,6 +37,7 @@ export const SECTIONS = [
     ["defect_category", "Defect category", "", "text", ""],
     ["milestone_type", "Milestone type", "", "text", ""],
     ["uat_priority", "UAT priority", "", "text", ""],
+    ["epic", "BDR_EPIC", "", "text", "e.g. Font & Family Light Mode"],
     ["defect_title_prefix", "Title prefix", "", "text", ""],
     ["defect_title_pattern", "Title pattern", "{AI_TITLE}", "text", "Placeholders: {PREFIX} {TE_KEY} {TC_KEY} {AI_TITLE}"],
   ]],
@@ -61,6 +62,7 @@ export const SECTIONS = [
     ["field_category", "Defect category", "", "text", ""],
     ["field_milestone", "Milestone type", "", "text", ""],
     ["field_uat_priority", "UAT priority", "", "text", ""],
+    ["field_epic", "BDR_EPIC", "", "text", ""],
   ]],
 ];
 

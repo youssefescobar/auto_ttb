@@ -128,3 +128,16 @@ test("defect type field found by name even without its ID in Settings", () => {
   assert.deepEqual(fields.customfield_4, { id: "41119", child: { id: "41813" } });
   assert.throws(() => buildDefectFields({ jira_project: "BDR" }, meta, { title: "x" }), /needs both values/);
 });
+
+test("Mobily field names and option labels", () => {
+  const m = { typeId: "1", fields: {
+    customfield_7: { name: "Defect Type & Filed Against", schema: { custom: "x:cascadingselect" }, allowedValues: [{ id: "9", value: "B2B Digital Revamp", children: [{ id: "10", value: "BDR-ANDROID" }, { id: "11", value: "BDR-IOS" }] }] },
+    customfield_8: { name: "Defect Severity", schema: { type: "option" }, allowedValues: [{ id: "2", value: "2-Medium" }] },
+    customfield_9: { name: "BDR_EPIC", schema: { type: "option" }, allowedValues: [{ id: "3", value: "Font & Family Light Mode" }] },
+  } };
+  const s = { jira_project: "BDR", defect_type: "B2B Digital Revamp", filed_against: "BDR-IOS", epic: "font & family light mode", field_defect_type: "customfield_999" };
+  const { fields } = buildDefectFields(s, m, { title: "x", severity: "Medium" });
+  assert.deepEqual(fields.customfield_7, { id: "9", child: { id: "11" } });
+  assert.deepEqual(fields.customfield_8, { id: "2" });
+  assert.deepEqual(fields.customfield_9, { id: "3" });
+});

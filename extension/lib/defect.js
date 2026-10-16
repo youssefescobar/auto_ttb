@@ -15,7 +15,7 @@ export const FIELD_NAMES = {
   field_steps: ["Steps to Recreate", "Steps to Reproduce", "Steps"],
   field_qa_analysis: ["QA Analysis"],
   field_test_data: ["Test Data"],
-  field_defect_type: ["Defect Type"],
+  field_defect_type: ["Defect Type & Filed Against", "Defect Type and Filed Against", "Defect Type"],
   field_environment: ["Defect Environment", "Environment"],
   field_phase: ["Defect Phase", "Phase"],
   field_usability: ["Usability Issue", "Usability"],
@@ -24,6 +24,7 @@ export const FIELD_NAMES = {
   field_category: ["Defect Category"],
   field_milestone: ["Milestone Type", "Milestone"],
   field_uat_priority: ["UAT Priority"],
+  field_epic: ["BDR_EPIC", "BDR Epic"],
 };
 
 const norm = (name) => String(name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -52,6 +53,8 @@ function matchOption(allowed, value) {
   return opts.find((o) => ["value", "name", "key"].some((k) => label(o, k).trim().toLowerCase() === v))
     // "BDR Android" still finds "BDR-ANDROID"
     || opts.find((o) => ["value", "name"].some((k) => norm(label(o, k)) && norm(label(o, k)) === norm(value)))
+    // "Medium" finds "2-Medium"
+    || opts.find((o) => norm(value) && norm(label(o, "value") || label(o, "name")).replace(/^\d+/, "") === norm(value))
     || null;
 }
 
@@ -157,6 +160,7 @@ export function buildDefectFields(settings, meta, draft) {
     ["field_category", settings.defect_category],
     ["field_milestone", settings.milestone_type],
     ["field_uat_priority", settings.uat_priority],
+    ["field_epic", settings.epic],
   ];
   const fields = {
     project: { key: settings.jira_project },
@@ -169,7 +173,8 @@ export function buildDefectFields(settings, meta, draft) {
   const skipped = [];
   const detected = detectCustomFields(meta.fields).found; // fallback for IDs not set in Settings
   for (const [key, value] of wanted) {
-    const id = key.startsWith("field_") ? settings[key] || detected[key] : key;
+    // A saved ID that isn't on this create screen (e.g. imported from another project) loses to the detected one
+    const id = !key.startsWith("field_") ? key : meta.fields[settings[key]] ? settings[key] : detected[key] || settings[key];
     if (key === "field_defect_type" && id && meta.fields[id] && !settings.defect_type) {
       throw new Error(`${meta.fields[id].name || "Defect type"} needs both values: set Settings → Defects → Defect type and Filed against.`);
     }
