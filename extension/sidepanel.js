@@ -47,7 +47,9 @@ function toast(msg, kind = "ok") {
   t.className = kind;
   t.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (t.hidden = true), kind === "error" ? 9000 : 3500);
+  t.title = kind === "error" ? "Click to close" : "";
+  // Errors stay until clicked so they can be read and copied
+  if (kind !== "error") toastTimer = setTimeout(() => (t.hidden = true), 3500);
 }
 
 async function busy(label, fn) {
@@ -605,6 +607,7 @@ $("load-form").addEventListener("submit", (e) => {
 
 $("te-select").addEventListener("change", (e) => e.target.value && openTe(e.target.value));
 $("open-settings").addEventListener("click", () => chrome.runtime.openOptionsPage());
+$("toast").addEventListener("click", () => { if (!getSelection().toString()) $("toast").hidden = true; });
 
 document.addEventListener("paste", (e) => {
   if (!state.te || !state.openTc || e.target.closest?.("input, textarea")) return;
