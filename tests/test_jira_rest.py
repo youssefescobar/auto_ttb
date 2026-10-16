@@ -261,3 +261,14 @@ def test_detect_fields_endpoint_reports_missing_login(saved_login, monkeypatch):
     import app as app_module
     res = app_module.app.test_client().post("/api/detect-fields", json={})
     assert res.status_code == 400 and "saved Jira login" in res.json["error"]
+
+
+def test_old_issue_key_setting_fills_for_project(jira, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "settings_overrides.json").write_text(json.dumps({"issue_key": "ABC-1"}))
+    monkeypatch.setattr(config, "_runtime_overrides", dict(config._runtime_overrides))
+    config.load_persisted_overrides()
+    assert config.get("for_project") == "ABC-1"
+    jira.meta.append({"fieldId": cf(jira_rest.FIELD_FOR_PROJECT), "name": "For Project", "schema": {"type": "string"}})
+    jira_rest.create_defect("t", "", [], data={})
+    assert jira.created[cf(jira_rest.FIELD_FOR_PROJECT)] == "ABC-1"

@@ -25,7 +25,6 @@ OVERRIDES_PATH = "settings_overrides.json"
 SECTIONS = [
     ("Jira connection", [
         ("jira_base_url", "Jira base URL", "", "text", "e.g. https://jira.example.com"),
-        ("jira_username", "Jira username", "", "text", ""),
         ("jira_pat", "Jira Personal Access Token", "", "secret",
          "Jira → Profile → Personal Access Tokens. Kept in the OS credential store, never in a file. "
          "Optional: without one, the app uses your saved Jira login (Login button) for the REST API."),
@@ -33,8 +32,6 @@ SECTIONS = [
          "auto = REST API using your token, or your saved Jira login if no token; browser = always drive the Jira page"),
         ("jira_ca_bundle", "Corporate CA bundle path", "", "text",
          "Only if Jira uses an internal certificate authority"),
-        ("network_speed", "Browser speed / timeout", "Normal", "select:Fast|Normal|Slow|Very Slow", ""),
-        ("headless_browser", "Hide the browser window", False, "bool", ""),
     ]),
     ("AI (Gemini)", [
         ("gemini_api_key", "Gemini API key", "", "secret", "Kept in the OS credential store"),
@@ -45,11 +42,8 @@ SECTIONS = [
     ]),
     ("Project", [
         ("jira_project", "Jira project key", "", "text", "Key defects are created in, e.g. ABC"),
-        ("project", "Project name (as shown in Jira)", "", "text", "Typed into the Create Issue project picker"),
-        ("issue_key", "For Project issue key", "", "text", "Issue key for the 'For Project' field"),
-        ("for_project", "For Project search text", "", "text", "Typed into the 'For Project' picker in the browser"),
+        ("for_project", "For Project issue key", "", "text", "Issue key for the 'For Project' field, e.g. ABC-123"),
         ("demo", "Demo", "", "text", ""),
-        ("default_te_key", "Default Test Execution key", "", "text", ""),
         ("environments", "TE environments (comma separated)", "SIT, UAT, PP, Prod", "text",
          "Options in the environment picker"),
         ("languages", "TE languages (comma separated)", "English, Arabic", "text", ""),
@@ -78,16 +72,19 @@ SECTIONS = [
          "Placeholders: {PREFIX} {TE_KEY} {TC_KEY} {AI_TITLE}"),
     ]),
     ("Workflow", [
-        ("transition_executing", "Transition: executing", "Start Progress", "text", ""),
         ("transition_pass", "Transition: pass", "Pass", "text", ""),
-        ("transition_fail", "Transition: fail", "Fail", "text", ""),
         ("auto_submit_defect", "Auto-submit defects", False, "bool",
          "Off = open the pre-filled Jira form so you review it and click Create"),
         ("auto_save_pot", "Auto-save Proof of Testing on Pass / Fail", False, "bool", ""),
-        ("draft_delay_min_seconds", "Batch submit: min delay (s)", 120, "number", ""),
-        ("draft_delay_max_seconds", "Batch submit: max delay (s)", 300, "number", ""),
     ]),
-    ("Jira custom field IDs", [
+    # Sections titled "Advanced: ..." start collapsed on the Config page.
+    ("Advanced: browser mode", [
+        ("project", "Project name (as shown in Jira)", "", "text",
+         "Only for filling the Create Issue form in the browser; typed into its project picker"),
+        ("network_speed", "Browser speed / timeout", "Normal", "select:Fast|Normal|Slow|Very Slow", ""),
+        ("headless_browser", "Hide the browser window", False, "bool", ""),
+    ]),
+    ("Advanced: Jira custom field IDs", [
         # Instance-specific: leave empty to skip a field. Find IDs in Jira's field admin or the Create form HTML.
         ("field_for_project", "For Project", "", "text", "e.g. customfield_12345"),
         ("field_demo", "Demo", "", "text", ""),
@@ -117,7 +114,8 @@ TYPES = {key: kind for _, fields in SECTIONS for key, _, _, kind, _ in fields}
 REQUIRED = ["jira_base_url"]
 
 # Keys saved by older versions -> current key
-_ALIASES = {"issue_type": "defect_issue_type", "environment": "defect_environment", "demo_name": "demo"}
+_ALIASES = {"issue_type": "defect_issue_type", "environment": "defect_environment", "demo_name": "demo",
+            "issue_key": "for_project"}
 
 _runtime_overrides = {}
 

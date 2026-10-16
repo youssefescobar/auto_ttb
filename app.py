@@ -765,16 +765,12 @@ _batch_state = {
 
 @app.route('/api/submit-all-drafts', methods=['POST'])
 def api_submit_all_drafts():
-    """Batch submit all drafts for a TE with randomized delays between submissions."""
-    import random
-
+    """Submit all drafts for a TE one after another in the background."""
     if _batch_state['running']:
         return jsonify({"error": "A batch submission is already in progress"}), 409
 
     data = request.json or {}
     te_key = data.get('te_key')
-    min_delay = data.get('min_delay_seconds', 120)
-    max_delay = data.get('max_delay_seconds', 300)
     if not te_key:
         return jsonify({"error": "Missing te_key"}), 400
 
@@ -797,6 +793,8 @@ def api_submit_all_drafts():
     def batch_worker():
         try:
             for i, tc in enumerate(draft_tcs):
+                if not _batch_state['running']:  # cancelled
+                    break
                 tc_key = tc.get('key', '')
                 _batch_state['current_tc'] = tc_key
                 try:
@@ -834,11 +832,6 @@ def api_submit_all_drafts():
                     db.save_te(te_key, tcs)
                 except Exception:
                     pass
-
-                # Wait with randomized delay (skip after last one)
-                if i < len(draft_tcs) - 1:
-                    delay = random.uniform(min_delay, max_delay)
-                    time.sleep(delay)
         finally:
             _batch_state['running'] = False
             _batch_state['current_tc'] = ''
@@ -848,8 +841,6 @@ def api_submit_all_drafts():
     return jsonify({
         "status": "started",
         "total": len(draft_tcs),
-        "min_delay": min_delay,
-        "max_delay": max_delay,
     })
 
 @app.route('/api/batch-status', methods=['GET'])

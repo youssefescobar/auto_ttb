@@ -436,7 +436,7 @@ def create_defect(summary: str, description: str, screenshot_paths: list[str],
     type_id, meta = _create_meta(project_key, issue_type)
 
     wanted = {
-        FIELD_FOR_PROJECT: config.get("issue_key"),
+        FIELD_FOR_PROJECT: config.get("for_project"),
         FIELD_DEMO: config.get("demo"),
         "components": config.get("components"),
         FIELD_SEVERITY: priority or data.get("severity") or config.get("priority"),
