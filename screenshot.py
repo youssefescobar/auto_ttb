@@ -44,7 +44,7 @@ def collect_screenshots(te_key: str = None, tc_key: str = None) -> list[str]:
     Saves files to executions/<TE_KEY>/<TC_KEY>/ folder.
     """
     if not te_key:
-        te_key = config.DEFAULT_TE_KEY
+        te_key = config.get("default_te_key") or "GENERAL"
     if not tc_key:
         tc_key = "GENERAL"
 

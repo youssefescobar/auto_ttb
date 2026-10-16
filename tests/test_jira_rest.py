@@ -27,6 +27,11 @@ class FakeResponse:
 SELECT = {"type": "option", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:select"}
 
 
+def cf(setting_key):
+    """Fake Jira custom field ID for a field_* setting."""
+    return f"customfield_{setting_key}"
+
+
 def opt(i, v):
     return {"id": str(i), "value": v}
 
@@ -43,15 +48,15 @@ class FakeJira:
              "allowedValues": [{"id": "10", "name": "Android"}, {"id": "11", "name": "iOS"}]},
             {"fieldId": "labels", "schema": {"type": "array", "items": "string"}},
             {"fieldId": "assignee", "schema": {"type": "user"}},
-            {"fieldId": jira_rest.FIELD_SEVERITY, "schema": SELECT, "allowedValues": [opt(1, "1-Low"), opt(2, "2-Medium")]},
-            {"fieldId": jira_rest.FIELD_SCENARIO, "schema": {"type": "string"}},
-            {"fieldId": jira_rest.FIELD_TCS_BLOCKED, "schema": {"type": "number"}},
-            {"fieldId": jira_rest.FIELD_ENVIRONMENT, "schema": SELECT, "allowedValues": [opt(5, "Integration")]},
-            {"fieldId": jira_rest.FIELD_DEFECT_TYPE,
+            {"fieldId": cf(jira_rest.FIELD_SEVERITY), "schema": SELECT, "allowedValues": [opt(1, "1-Low"), opt(2, "2-Medium")]},
+            {"fieldId": cf(jira_rest.FIELD_SCENARIO), "schema": {"type": "string"}},
+            {"fieldId": cf(jira_rest.FIELD_TCS_BLOCKED), "schema": {"type": "number"}},
+            {"fieldId": cf(jira_rest.FIELD_ENVIRONMENT), "schema": SELECT, "allowedValues": [opt(5, "Integration")]},
+            {"fieldId": cf(jira_rest.FIELD_DEFECT_TYPE),
              "schema": {"type": "option-with-child", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:cascadingselect"},
              "allowedValues": [{"id": "41119", "value": "B2B Digital Revamp",
                                 "children": [{"id": "41813", "value": "BDR-ANDROID"}]}]},
-            {"fieldId": jira_rest.FIELD_DEMO, "schema": SELECT, "allowedValues": [opt(7, "Demo 1")]},
+            {"fieldId": cf(jira_rest.FIELD_DEMO), "schema": SELECT, "allowedValues": [opt(7, "Demo 1")]},
         ]
 
     def request(self, method, url, **kw):
@@ -105,10 +110,13 @@ def jira(monkeypatch):
 
     monkeypatch.setattr(jira_rest, "_session", lambda: Sess())
     monkeypatch.setattr(jira_rest.secret_store, "get_secret", lambda name: "tok" if name == "jira_pat" else "")
-    monkeypatch.setattr(config, "_runtime_overrides", {"jira_project": "BDR", "defect_issue_type": "Defect"})
-    monkeypatch.setattr(config, "DEFECT_BOILERPLATE", {
-        **config.DEFECT_BOILERPLATE, "components": ["Android"], "defect_type": "B2B Digital Revamp",
-        "filed_against": "BDR-ANDROID", "defect_environment": "Integration", "labels": ["Lightmode"],
+    monkeypatch.setattr(config, "_ENV_FILE", {})  # ignore the developer's local .env
+    field_ids = {k: cf(k) for k in config.DEFAULTS if k.startswith("field_")}
+    monkeypatch.setattr(config, "_runtime_overrides", {
+        "jira_base_url": "https://jira.test", "jira_project": "BDR", "defect_issue_type": "Defect",
+        "components": "Android", "defect_type": "B2B Digital Revamp", "filed_against": "BDR-ANDROID",
+        "defect_environment": "Integration", "labels": "Lightmode", "priority": "1-Low", "demo": "Demo 1",
+        "usability_issue": "No", **field_ids,
     })
     return fake
 
@@ -148,20 +156,20 @@ def test_create_defect_builds_fields(jira, tmp_path):
     assert f["project"] == {"key": "BDR"} and f["issuetype"] == {"id": "42"}
     assert f["components"] == [{"id": "10"}]
     assert f["labels"] == ["Lightmode"]
-    assert f[jira_rest.FIELD_SEVERITY] == {"id": "1"}
-    assert f[jira_rest.FIELD_TCS_BLOCKED] == 2.0
-    assert f[jira_rest.FIELD_DEFECT_TYPE] == {"id": "41119", "child": {"id": "41813"}}
+    assert f[cf(jira_rest.FIELD_SEVERITY)] == {"id": "1"}
+    assert f[cf(jira_rest.FIELD_TCS_BLOCKED)] == 2.0
+    assert f[cf(jira_rest.FIELD_DEFECT_TYPE)] == {"id": "41119", "child": {"id": "41813"}}
     assert f["assignee"] == {"name": "sshukla"}
-    assert jira_rest.FIELD_USABILITY not in f  # not on the create screen
+    assert cf(jira_rest.FIELD_USABILITY) not in f  # not on the create screen
     paths = [(m, p) for m, p, _ in jira.calls]
     assert ("POST", "/rest/api/2/issueLink") in paths
     assert ("POST", "/rest/api/2/issue/BDR-77/attachments") in paths
 
 
 def test_create_defect_drops_rejected_fields(jira):
-    jira.reject_fields = {jira_rest.FIELD_DEMO: True}
+    jira.reject_fields = {cf(jira_rest.FIELD_DEMO): True}
     assert jira_rest.create_defect("t", "", [], data={}) == "BDR-77"
-    assert jira_rest.FIELD_DEMO not in jira.created
+    assert cf(jira_rest.FIELD_DEMO) not in jira.created
 
 
 def test_secret_never_persisted_in_overrides(monkeypatch, tmp_path):
@@ -175,3 +183,16 @@ def test_secret_never_persisted_in_overrides(monkeypatch, tmp_path):
     assert stored == {"jira_pat": "secret-token"}
     saved = json.loads((tmp_path / "settings_overrides.json").read_text())
     assert "jira_pat" not in saved and saved["project"] == "X"
+
+
+def test_field_without_id_is_skipped(jira, monkeypatch):
+    monkeypatch.setitem(config._runtime_overrides, jira_rest.FIELD_SEVERITY, "")
+    jira_rest.create_defect("t", "", [], data={})
+    assert cf(jira_rest.FIELD_SEVERITY) not in jira.created
+    assert jira.created[cf(jira_rest.FIELD_DEMO)] == {"id": "7"}
+
+
+def test_missing_base_url_is_reported(jira, monkeypatch):
+    monkeypatch.setitem(config._runtime_overrides, "jira_base_url", "")
+    with pytest.raises(jira_rest.JiraRestError, match="Config page"):
+        jira_rest.transition_issue("TC-1", "Pass")

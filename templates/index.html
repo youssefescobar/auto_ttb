@@ -22,15 +22,8 @@
         <span class="breadcrumb-sep">/</span>
         <span id="breadcrumb-te" class="breadcrumb-item active"></span>
         <select id="te-env-select" class="env-select" style="margin-left: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-muted); padding: 0.15rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.75rem; cursor: pointer; outline: none;">
-          <option value="SIT">SIT</option>
-          <option value="PP">PP</option>
-          <option value="Prod">Prod</option>
-          <option value="UAT">UAT</option>
-          <option value="Unknown">Unknown</option>
         </select>
         <select id="te-lang-select" class="lang-select" style="margin-left: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-muted); padding: 0.15rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.75rem; cursor: pointer; outline: none;">
-          <option value="English">English</option>
-          <option value="Arabic">Arabic</option>
         </select>
         <div class="link-te-container" style="display: inline-flex; align-items: center; margin-left: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.15rem 0.5rem;">
           <input type="checkbox" id="te-link-toggle" title="Enable Linked TE" style="margin-right: 0.3rem;">
@@ -42,190 +35,15 @@
       <div class="session-indicator" id="session-dot" title="Session Status"></div>
       <button id="btn-login" class="btn btn-sm btn-outline">🔑 Login</button>
       <button id="btn-save-session" class="btn btn-sm btn-save-session hidden">💾 Save Session</button>
-      <button id="btn-settings" class="btn-icon" aria-label="Settings">
+      <a href="/config" id="btn-settings" class="btn-icon" aria-label="Config" title="Config">
         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
           <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
         </svg>
-      </button>
+      </a>
     </div>
   </header>
 
-  <!-- Settings Side Panel -->
-  <div id="settings-overlay" class="overlay hidden"></div>
-  <div id="settings-panel" class="side-panel hidden">
-    <div class="panel-header">
-      <h2>⚙ Settings</h2>
-      <button id="btn-close-settings" class="btn-icon">&times;</button>
-    </div>
-    <div class="panel-content">
-      <form id="settings-form">
-
-        <h3 class="settings-section-title">🤖 AI & Privacy</h3>
-        <div class="form-group checkbox-group">
-          <label class="checkbox-label">
-            <input type="checkbox" name="share_screenshots_with_ai" id="setting-share-screenshots">
-            <span>Share screenshots with AI</span>
-          </label>
-          <small class="help-text text-muted">When disabled, only text notes are sent to Gemini AI for defect drafting.</small>
-        </div>
-
-        <h3 class="settings-section-title">🌐 Jira Instance</h3>
-        <div class="form-group">
-          <label>Jira Base URL</label>
-          <input type="text" name="jira_base_url" placeholder="https://jira.company.com">
-        </div>
-        <div class="form-group">
-          <label>Jira Personal Access Token</label>
-          <input type="password" name="jira_pat" autocomplete="off" placeholder="Paste a Jira Personal Access Token">
-          <small class="help-text text-muted">Create one in Jira under Profile → Personal Access Tokens. Stored in your OS credential store, never in a file. With a token, Jira actions use the REST API instead of a browser.</small>
-        </div>
-        <div class="form-group">
-          <label>Jira Connection Mode</label>
-          <select name="jira_mode">
-            <option value="auto">Auto (REST API when a token is set)</option>
-            <option value="browser">Browser only (Playwright)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Jira Project Key</label>
-          <input type="text" name="jira_project" placeholder="BDR (taken from Project name if empty)">
-        </div>
-        <div class="form-group">
-          <label>Network Speed / Timeout (Browser action speed)</label>
-          <select name="network_speed">
-            <option value="Fast">Fast (15s timeout)</option>
-            <option value="Normal">Normal (30s timeout)</option>
-            <option value="Slow">Slow (60s timeout)</option>
-            <option value="Very Slow">Very Slow (120s timeout)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Project</label>
-          <div class="setting-with-history">
-            <input type="text" name="project" placeholder="My Project Name">
-            <select class="history-dropdown hidden" data-for="project"><option value="">— saved options —</option></select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>For Project / Scope</label>
-          <div class="setting-with-history">
-            <input type="text" name="for_project" placeholder='PROJ-1234 Technical project...'>
-            <select class="history-dropdown hidden" data-for="for_project"><option value="">— saved options —</option></select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Demo</label>
-          <div class="setting-with-history">
-            <input type="text" name="demo" placeholder="Demo 1">
-            <select class="history-dropdown hidden" data-for="demo"><option value="">— saved options —</option></select>
-          </div>
-        </div>
-
-        <h3 class="settings-section-title">🐛 Defect Fields</h3>
-        <div class="form-group">
-          <label>Issue Type</label>
-          <input type="text" name="issue_type" placeholder="Defect">
-        </div>
-        <div class="form-group">
-          <label>Component/s</label>
-          <div class="setting-with-history">
-            <input type="text" name="components" placeholder="Android">
-            <select class="history-dropdown hidden" data-for="components"><option value="">— saved options —</option></select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Impacted System</label>
-          <div class="setting-with-history">
-            <input type="text" name="impacted_system" placeholder="Mobile App">
-            <select class="history-dropdown hidden" data-for="impacted_system"><option value="">— saved options —</option></select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Defect Type</label>
-          <div class="setting-with-history">
-            <input type="text" name="defect_type" placeholder="B2B Digital Revamp">
-            <select class="history-dropdown hidden" data-for="defect_type"><option value="">— saved options —</option></select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Filed Against</label>
-          <div class="setting-with-history">
-            <input type="text" name="filed_against" placeholder="Team Name">
-            <select class="history-dropdown hidden" data-for="filed_against"><option value="">— saved options —</option></select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Defect Environment</label>
-          <div class="setting-with-history">
-            <input type="text" name="defect_environment" placeholder="Environment">
-            <select class="history-dropdown hidden" data-for="defect_environment"><option value="">— saved options —</option></select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Defect Phase</label>
-          <div class="setting-with-history">
-            <input type="text" name="defect_phase" placeholder="QA">
-            <select class="history-dropdown hidden" data-for="defect_phase"><option value="">— saved options —</option></select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Labels</label>
-          <div class="setting-with-history">
-            <input type="text" name="labels" placeholder="Lightmode">
-            <select class="history-dropdown hidden" data-for="labels"><option value="">— saved options —</option></select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Milestone Type</label>
-          <div class="setting-with-history">
-            <input type="text" name="milestone_type" placeholder="Batch 1">
-            <select class="history-dropdown hidden" data-for="milestone_type"><option value="">— saved options —</option></select>
-          </div>
-        </div>
-
-        <h3 class="settings-section-title">📝 Title & Transitions</h3>
-        <div class="form-group">
-          <label>Defect Title Prefix</label>
-          <div class="setting-with-history">
-            <input type="text" name="defect_title_prefix" placeholder="LightMode_SIT_Android_">
-            <select class="history-dropdown hidden" data-for="defect_title_prefix"><option value="">— saved options —</option></select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Transitions</label>
-          <div class="form-row">
-            <input type="text" name="transition_executing" placeholder="Start Progress">
-            <input type="text" name="transition_pass" placeholder="Pass">
-            <input type="text" name="transition_fail" placeholder="Fail">
-          </div>
-        </div>
-
-        <h3 class="settings-section-title">📄 Proof of Testing</h3>
-        <div class="form-group checkbox-group">
-          <label class="checkbox-label">
-            <input type="checkbox" name="auto_save_pot" id="setting-auto-save-pot">
-            <span>Auto-save to POT on Pass / Fail</span>
-          </label>
-        </div>
-
-        <h3 class="settings-section-title">⏱ Draft Queue Timing</h3>
-        <div class="form-group">
-          <label>Min delay between batch submissions (seconds)</label>
-          <input type="number" name="draft_delay_min_seconds" placeholder="120" min="0">
-        </div>
-        <div class="form-group">
-          <label>Max delay between batch submissions (seconds)</label>
-          <input type="number" name="draft_delay_max_seconds" placeholder="300" min="0">
-        </div>
-
-        <div class="panel-actions">
-          <button type="button" id="btn-save-settings" class="btn btn-primary w-full">💾 Save Settings</button>
-        </div>
-      </form>
-    </div>
-  </div>
-  
   <!-- MAIN CONTENT -->
   <main>
 

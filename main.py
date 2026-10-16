@@ -46,7 +46,7 @@ def review_and_edit(summary, body):
 def check_session():
     """Ensure Jira session exists before running workflow."""
     # With a token and auto-submit on, every Jira action goes over REST
-    if jira_actions.jira_rest.is_enabled() and config.get("auto_submit_defect", False):
+    if jira_actions.jira_rest.is_enabled() and config.get("auto_submit_defect"):
         return
     if not os.path.exists(config.BROWSER_STATE_PATH):
         print(f"\n[!] Jira session file '{config.BROWSER_STATE_PATH}' not found.")
@@ -56,13 +56,13 @@ def check_session():
 
 def print_banner():
     print("\n" + "=" * 60)
-    print("      B2B Digital Revamp (BDR) - QA Test Execution Wizard    ")
+    print("              QA Test Execution Wizard              ")
     print("=" * 60)
-    print(f" Project Key      : {config.PROJECT_KEY}")
-    print(f" Technical Project: {config.TECHNICAL_PROJECT}")
-    print(f" Demo             : {config.DEMO_NAME}")
-    print(f" Defect Prefix    : {config.DEFECT_TITLE_PREFIX}")
-    print(f" Defect Label     : {config.DEFECT_BOILERPLATE.get('labels', ['Lightmode'])}")
+    print(f" Project          : {config.get('project')}")
+    print(f" Jira project key : {config.get('jira_project')}")
+    print(f" Demo             : {config.get('demo')}")
+    print(f" Defect Prefix    : {config.get('defect_title_prefix')}")
+    print(f" Defect Labels    : {config.get('labels')}")
     print("=" * 60 + "\n")
 
 
@@ -90,7 +90,7 @@ def run_interactive_wizard(tc_key: str = None, te_key: str = None):
     os.makedirs(tc_dir, exist_ok=True)
 
     try:
-        jira_actions.transition_tc(tc_key, config.TRANSITION_EXECUTING)
+        jira_actions.transition_tc(tc_key, config.get("transition_executing"))
     except Exception as e:
         print(f"  [!] Note on transition to executing: {e}")
 
@@ -107,7 +107,7 @@ def run_interactive_wizard(tc_key: str = None, te_key: str = None):
         shots = screenshot.collect_screenshots(te_key=te_key, tc_key=tc_key)
         poc_doc.append_pass(tc_key=tc_key, screenshot_paths=shots, te_key=te_key)
         try:
-            jira_actions.transition_tc(tc_key, config.TRANSITION_PASS)
+            jira_actions.transition_tc(tc_key, config.get("transition_pass"))
         except Exception as e:
             print(f"  [!] Note on transition to pass: {e}")
 
@@ -176,7 +176,7 @@ def run_interactive_wizard(tc_key: str = None, te_key: str = None):
                 priority=severity
             )
             jira_actions.add_comment_with_screenshots(issue_key, final_body, shots)
-            jira_actions.transition_tc(tc_key, config.TRANSITION_FAIL)
+            jira_actions.transition_tc(tc_key, config.get("transition_fail"))
 
             print(f"\n=======================================================")
             print(f" [SUCCESS] {tc_key} FAILED")

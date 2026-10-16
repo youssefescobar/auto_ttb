@@ -8,14 +8,14 @@ Automated workflow CLI tool for QA manual testing. Captures screenshots from the
 
 ```text
 auto_ttb/
-├── config.py                 # Core configurations & defaults
-├── setup.py                  # Interactive Onboarding Setup Wizard
+├── config.py                 # Settings list (edited on the web Config page)
+├── app.py                    # Web app (run this)
 ├── main.py                   # Main CLI test execution driver
 ├── defect_draft.py           # Gemini AI title & defect description generator
 ├── jira_actions.py           # Playwright Jira UI actions & session management
 ├── poc_doc.py                # Word document generation per TE
 ├── screenshot.py             # Clipboard image grabber
-├── .env                      # Saved environment variables (created by setup.py)
+├── settings_overrides.json   # Settings saved from the Config page
 └── executions/               # Organized test output directory
     └── TE-101/               # Test Execution Folder
         ├── poc_report_TE-101.docx
@@ -58,32 +58,28 @@ playwright install chromium
 
 ---
 
-## Quick Setup & Onboarding Wizard
+## Configuration
 
-Run the interactive setup wizard to configure your Jira URL, Gemini API Key, default TE key, and defect title patterns:
+There is no setup script and nothing company-specific is built in. Start the web app and open **Config** (the gear icon, or http://127.0.0.1:5000/config):
 
 ```bash
-python setup.py
+python app.py
 ```
 
-
-The wizard will guide you through:
-1. **Jira Settings:** Base URL, Username, Project Key, Issue Type.
-2. **Gemini AI Settings:** Gemini API Key and Model (`gemini-2.5-flash`).
-3. **Test Execution & Defect Customization:** Default TE key and Defect Title pattern (e.g. `[{TE_KEY}][{TC_KEY}] {AI_TITLE}`).
-4. **Jira Token / Browser Login:** Saves a Jira Personal Access Token to the OS credential store, or launches a browser once for manual SSO/2FA login to save `jira_session.json`.
+The app sends you to the Config page until the Jira base URL is set. Everything lives there: Jira URL, token and mode, Gemini key and model, project and defect field values, title pattern, workflow transitions, batch timing and the Jira custom field IDs. Secrets (Jira token, Gemini key) go to the OS credential store; everything else is saved to `settings_overrides.json`. Values in an existing `.env` are still read as a fallback.
 
 ---
 
 ## Jira Connection: Token (recommended) vs Browser
 
-**Token / REST API (recommended).** Create a Personal Access Token in Jira (*Profile → Personal Access Tokens*) and enter it in `python setup.py` or the web app's Settings. It is stored in the OS credential store (Windows Credential Manager / macOS Keychain) via `keyring`, never in a project file. With a token:
+**Token / REST API (recommended).** Create a Personal Access Token in Jira (*Profile → Personal Access Tokens*) and enter it on the Config page. It is stored in the OS credential store (Windows Credential Manager / macOS Keychain) via `keyring`, never in a project file. With a token:
 
 - TC transitions and Test Execution lookups use the Jira REST API, no browser window.
 - Defects and comments are created over REST when **Auto-submit defect** is on. When it is off, the browser still opens the pre-filled Jira form so you can review it before clicking Create.
-- Set `JIRA_PROJECT` (e.g. `BDR`) if it can't be derived from the project name. If Jira uses an internal certificate authority, point `JIRA_CA_BUNDLE` at its CA file.
+- Set the **Jira project key** on the Config page. If Jira uses an internal certificate authority, set **Corporate CA bundle path**.
+- Fill in the **Jira custom field IDs** for your Jira's Defect screen; fields left empty are skipped.
 
-**Browser (fallback).** Without a token, or with `JIRA_MODE=browser`, Playwright drives the Jira UI using the session saved in `jira_session.json`. Treat that file like a password: it contains your Jira login cookies.
+**Browser (fallback).** Without a token, or with Connection mode set to *browser*, Playwright drives the Jira UI using the session saved in `jira_session.json`. Treat that file like a password: it contains your Jira login cookies.
 
 The web app's Flask debugger is off by default; set `FLASK_DEBUG=1` only while developing.
 

@@ -81,7 +81,7 @@ def save_te(te_key: str, test_cases: list, environment: str = None, language: st
         existing = tes.get(te_key, {})
         
         import config
-        env = environment or existing.get("environment") or config.get("environment", "Unknown")
+        env = environment or existing.get("environment") or (config.get("environments") or "Unknown").split(",")[0].strip()
         lang = language or existing.get("language") or "English"
         l_te = linked_te if linked_te is not None else existing.get("linked_te", "")
         l_enabled = linked_te_enabled if linked_te_enabled is not None else existing.get("linked_te_enabled", False)

@@ -6,7 +6,7 @@ from google.genai import types
 import config
 
 def _build_system_prompt() -> str:
-    env = config.get("environment", "Integration (SIT Android)")
+    env = config.get("defect_environment") or "the current environment"
     return f"""You are helping a QA engineer write a structured Jira defect for {env} testing.
 Given the notes and images (both Expected Result/Figma designs and Actual Result/Bug screenshots), produce clean, professional QA content.
 
@@ -21,9 +21,9 @@ Keep each section clear, professional, and concise. No markdown headers with '#'
 def _get_gemini_client():
     api_key = config.get('gemini_api_key') or os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        return {"error": "GEMINI_API_KEY not found in environment or config.py / .env"}
+        return {"error": "Set the Gemini API key on the Config page."}
 
-    http_proxy = config.get('https_proxy') or config.get('http_proxy') or os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or os.environ.get("https_proxy") or os.environ.get("http_proxy")
+    http_proxy = config.get('https_proxy') or os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or os.environ.get("https_proxy") or os.environ.get("http_proxy")
 
     try:
         if http_proxy:
@@ -56,7 +56,7 @@ def generate_defect_title(notes: str, tc_key: str = "", te_key: str = "", expect
     ai_title = notes[:60]
     try:
         response = client.models.generate_content(
-            model=config.get('gemini_model', "gemini-2.5-flash"),
+            model=config.get("gemini_model"),
             contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction="You write concise, professional bug titles for software Jira issues. Return ONLY the title details text, max 8 words, no punctuation at the end.",
@@ -69,8 +69,8 @@ def generate_defect_title(notes: str, tc_key: str = "", te_key: str = "", expect
     except Exception as e:
         return {"error": f"AI Title generation error: {e}"}
 
-    prefix = config.get("defect_title_prefix", "LightMode_SIT_Android_")
-    pattern = config.get("defect_title_pattern", "{AI_TITLE}")
+    prefix = config.get("defect_title_prefix")
+    pattern = config.get("defect_title_pattern")
     
     if "{AI_TITLE}" in pattern:
         formatted_title = pattern.format(TE_KEY=te_key, TC_KEY=tc_key, AI_TITLE=ai_title)
@@ -114,7 +114,7 @@ def draft_defect_sections(notes: str, expected_shots: list[str] = None, actual_s
 
     try:
         response = client.models.generate_content(
-            model=config.get('gemini_model', "gemini-2.5-flash"),
+            model=config.get("gemini_model"),
             contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=_build_system_prompt(),

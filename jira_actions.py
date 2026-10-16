@@ -13,6 +13,16 @@ from playwright.sync_api import sync_playwright
 import config
 import jira_rest
 
+
+def _cf(name: str, fmt: str = "#{}"):
+    """Selector for a Jira custom field whose ID is set on the Config page, else None."""
+    field_id = config.get(f"field_{name}")
+    return fmt.format(field_id) if field_id else None
+
+
+def _cf_sels(name: str, *fmts: str) -> list:
+    return [s for s in (_cf(name, f) for f in fmts) if s]
+
 _login_lock = threading.Lock()
 _save_requested_event = threading.Event()
 
@@ -29,7 +39,7 @@ def start_login_session():
 
         _save_requested_event.clear()
         _login_state["status"] = "opening"
-        _login_state["message"] = f"Opening browser to {config.JIRA_BASE_URL}..."
+        _login_state["message"] = f"Opening browser to {jira_rest.base_url()}..."
 
     def _worker():
         try:
@@ -37,12 +47,12 @@ def start_login_session():
                 browser = p.chromium.launch(headless=False)
                 context = browser.new_context()
                 page = context.new_page()
-                page.goto(config.JIRA_BASE_URL, timeout=0)
+                page.goto(jira_rest.base_url(), timeout=0)
 
                 with _login_lock:
                     _login_state["status"] = "open"
                     _login_state["message"] = "Browser open! Log into Jira, then click 'Save Jira Session' in web app."
-                print(f"[+] Login browser launched to {config.JIRA_BASE_URL}")
+                print(f"[+] Login browser launched to {jira_rest.base_url()}")
 
                 # Loop to keep the browser open and handle save requests
                 while not page.is_closed():
@@ -122,7 +132,7 @@ def get_login_status():
 
 def login_and_save_session():
     """CLI wrapper: launches browser, waits for Enter in terminal, saves session."""
-    print(f"Opening browser to {config.JIRA_BASE_URL}...")
+    print(f"Opening browser to {jira_rest.base_url()}...")
     start_login_session()
     time.sleep(3)
     input("\n--> Log in manually in the opened browser window, then press Enter here to save session...")
@@ -130,7 +140,7 @@ def login_and_save_session():
 
 
 def get_timeouts():
-    speed = config.get("network_speed", "Normal")
+    speed = config.get("network_speed")
     if speed == "Fast":
         return 15000, 3000
     elif speed == "Slow":
@@ -141,14 +151,14 @@ def get_timeouts():
         return 30000, 5000 # Normal
 
 def _get_context(p):
-    headless_setting = getattr(config, "HEADLESS_BROWSER", False)
+    headless_setting = bool(config.get("headless_browser"))
     browser = p.chromium.launch(headless=headless_setting)
     
     if not os.path.exists(config.BROWSER_STATE_PATH):
         browser.close()
         raise FileNotFoundError(
             f"Jira session file '{config.BROWSER_STATE_PATH}' not found.\n"
-            f"Please run 'python jira_actions.py' to perform initial login first."
+            f"Click 'Login' in the app's top bar, or set a Jira token on the Config page."
         )
 
     context = browser.new_context(storage_state=config.BROWSER_STATE_PATH)
@@ -166,7 +176,7 @@ def transition_tc(tc_key: str, transition_name: str):
     with sync_playwright() as p:
         browser, context = _get_context(p)
         page = context.new_page()
-        page.goto(f"{config.JIRA_BASE_URL}/browse/{tc_key}")
+        page.goto(f"{jira_rest.base_url()}/browse/{tc_key}")
 
         more_button = page.locator("#opsbar-transitions_more")
         if more_button.is_visible():
@@ -187,6 +197,8 @@ def transition_tc(tc_key: str, transition_name: str):
 
 def _fill_select(page, selector: str, val_str: str) -> bool:
     """Fill a standard <select> element by matching option text or value."""
+    if not selector or not val_str:
+        return False
     try:
         loc = page.locator(selector)
         if loc.count() == 0 or not loc.first.is_visible(timeout=1000):
@@ -210,6 +222,8 @@ def _fill_textarea(page, selector: str, val_str: str) -> bool:
     Uses Ctrl+A + Delete to clear, then insert_text() to paste the full value
     in one shot — fires input events so Jira's JS listeners still trigger.
     """
+    if not selector or not val_str:
+        return False
     try:
         loc = page.locator(selector)
         if loc.count() == 0 or not loc.first.is_visible(timeout=1000):
@@ -232,6 +246,8 @@ def _fill_aui_autocomplete(page, selector: str, val_str: str, wait_ms: int = 150
     click the matching item if found, or press Enter to add as a tag/confirm.
     Works for: Components, Labels, Assignee, Linked Issues, and similar AUI pickers.
     """
+    if not selector or not val_str:
+        return False
     try:
         loc = page.locator(selector)
         if loc.count() == 0 or not loc.first.is_visible(timeout=2000):
@@ -403,34 +419,33 @@ def fill_jira_field(page, field_name: str, value: str):
     field_selectors_map = {
         "summary": ["#summary", "input[name='summary']", "textarea[name='summary']"],
         "description": ["#description", "textarea[name='description']"],
-        "forproject": ["[data-customfieldid='customfield_24115'] input", "#customfield_24115-field", "#customfield_24115", "select[name='customfield_24115']", "#react-select-2-input"],
+        "forproject": _cf_sels("for_project", "[data-customfieldid='{}'] input", "#{}-field", "#{}", "select[name='{}']") + ["#react-select-2-input"],
         "linkedissues": ["#issuelinks-issues-textarea", "#issuelinks-issues-field", "#issuelinks-issues", "textarea[name='issuelinks-issues']"],
         "issue": ["#issuelinks-issues-textarea", "#issuelinks-issues-field", "#issuelinks-issues", "textarea[name='issuelinks-issues']"],
-        "demo": ["#customfield_28800", "select[name='customfield_28800']", "#customfield_28800-field"],
-        "sprint": ["#customfield_10103-field", "#customfield_10103", "select[name='customfield_10103']"],
+        "demo": _cf_sels("demo", "#{}", "select[name='{}']", "#{}-field"),
         "component": ["#components-textarea", "#components-field", "select[name='components']", "#components"],
         "components": ["#components-textarea", "#components-field", "select[name='components']", "#components"],
-        "defectseverity": ["#customfield_10704", "select[name='customfield_10704']", "#priority-field", "#priority"],
-        "testcasesblocked": ["#customfield_11406", "input[name='customfield_11406']"],
-        "impactedsystem": ["#customfield_11414", "select[name='customfield_11414']"],
-        "scenario": ["#customfield_11518", "textarea[name='customfield_11518']"],
-        "expectedresult": ["#customfield_11519", "textarea[name='customfield_11519']"],
-        "actualresult": ["#customfield_11520", "textarea[name='customfield_11520']"],
-        "stepstorecreate": ["#customfield_11521", "textarea[name='customfield_11521']"],
-        "testdata": ["#customfield_11523", "textarea[name='customfield_11523']"],
-        "qaanalysis": ["#customfield_11522", "textarea[name='customfield_11522']"],
-        "defecttype": ["#customfield_11529", "select[name='customfield_11529']"],
-        "filedagainst": ["select[name='customfield_11529:1']", "#customfield_11529\\:1"],
+        "defectseverity": _cf_sels("severity", "#{}", "select[name='{}']") + ["#priority-field", "#priority"],
+        "testcasesblocked": _cf_sels("tcs_blocked", "#{}", "input[name='{}']"),
+        "impactedsystem": _cf_sels("impacted_system", "#{}", "select[name='{}']"),
+        "scenario": _cf_sels("scenario", "#{}", "textarea[name='{}']"),
+        "expectedresult": _cf_sels("expected", "#{}", "textarea[name='{}']"),
+        "actualresult": _cf_sels("actual", "#{}", "textarea[name='{}']"),
+        "stepstorecreate": _cf_sels("steps", "#{}", "textarea[name='{}']"),
+        "testdata": _cf_sels("test_data", "#{}", "textarea[name='{}']"),
+        "qaanalysis": _cf_sels("qa_analysis", "#{}", "textarea[name='{}']"),
+        "defecttype": _cf_sels("defect_type", "#{}", "select[name='{}']"),
+        "filedagainst": _cf_sels("defect_type", "select[name='{}:1']", "#{}\\:1"),
         "assignee": ["#assignee-field", "#assignee", "input[name='assignee']"],
-        "defectenvironment": ["#customfield_10707", "select[name='customfield_10707']", "#environment"],
-        "defectphase": ["#customfield_11404", "select[name='customfield_11404']"],
-        "usabilityissue": ["#customfield_14106-2", "input[name='customfield_14106']"],
+        "defectenvironment": _cf_sels("environment", "#{}", "select[name='{}']") + ["#environment"],
+        "defectphase": _cf_sels("phase", "#{}", "select[name='{}']"),
+        "usabilityissue": _cf_sels("usability", "#{}-2", "input[name='{}']"),
         "labels": ["#labels-textarea", "#labels-field", "textarea[name='labels']", "#labels"],
-        "reoccurrence": ["#customfield_15100", "select[name='customfield_15100']"],
-        "newstackimpact": ["#customfield_28306", "select[name='customfield_28306']"],
-        "defectcategory": ["#customfield_28900", "select[name='customfield_28900']"],
-        "milestonetype": ["#customfield_18143", "select[name='customfield_18143']"],
-        "uatpriority": ["#customfield_31100", "select[name='customfield_31100']"]
+        "reoccurrence": _cf_sels("reoccurrence", "#{}", "select[name='{}']"),
+        "newstackimpact": _cf_sels("newstack", "#{}", "select[name='{}']"),
+        "defectcategory": _cf_sels("category", "#{}", "select[name='{}']"),
+        "milestonetype": _cf_sels("milestone", "#{}", "select[name='{}']"),
+        "uatpriority": _cf_sels("uat_priority", "#{}", "select[name='{}']")
     }
 
     # Try exact mappings
@@ -487,15 +502,15 @@ def create_defect(
 
     # REST creates the issue directly, so only use it when the user opted out of
     # reviewing the pre-filled form in Jira.
-    if jira_rest.is_enabled() and config.get("auto_submit_defect", False):
+    if jira_rest.is_enabled() and config.get("auto_submit_defect"):
         return jira_rest.create_defect(summary, description, screenshot_paths,
                                        assignee=assignee, priority=priority, data=data)
 
     with sync_playwright() as p:
         browser, context = _get_context(p)
         page = context.new_page()
-        print(f"[*] Opening Jira Create Issue dialog: {config.JIRA_BASE_URL}/secure/CreateIssue.jspa")
-        page.goto(f"{config.JIRA_BASE_URL}/secure/CreateIssue.jspa")
+        print(f"[*] Opening Jira Create Issue dialog: {jira_rest.base_url()}/secure/CreateIssue.jspa")
+        page.goto(f"{jira_rest.base_url()}/secure/CreateIssue.jspa")
         page.wait_for_load_state("networkidle")  # wait for all JS/AUI to finish loading
         # Extra wait for AUI widgets to fully initialise after network idle
         page.wait_for_selector("#project-field")
@@ -516,7 +531,7 @@ def create_defect(
                 proj_input = page.locator("#project-field")
                 proj_input.click()
                 proj_input.click(click_count=3)
-                proj_name = config.get("project", "B2B Digital Revamp (BDR)")
+                proj_name = config.get("project")
                 proj_input.type(proj_name, delay=40)
                 time.sleep(0.5)
                 page.keyboard.press("Enter")
@@ -527,7 +542,7 @@ def create_defect(
                 it_input = page.locator("#issuetype-field")
                 it_input.click()
                 it_input.click(click_count=3)
-                it_name = config.get("issue_type", "Defect")
+                it_name = config.get("defect_issue_type")
                 it_input.type(it_name, delay=40)
                 time.sleep(0.5)
                 page.keyboard.press("Enter")
@@ -577,13 +592,12 @@ def create_defect(
             _fill_textarea(page, "#description", description)
             time.sleep(0.3)
 
-        # 3. For Project (customfield_24115) — React-Select autocomplete
-        # If already pre-filled (value shown) skip; otherwise type JK26-3835
+        # 3. For Project — React-Select autocomplete
+        fp_val = config.get("for_project")
         react_input = page.locator("#react-select-2-input")
-        if react_input.count() > 0 and react_input.first.is_visible(timeout=1000):
+        if fp_val and react_input.count() > 0 and react_input.first.is_visible(timeout=1000):
             try:
                 react_input.first.click()
-                fp_val = config.get("for_project", "JK26-3835")
                 react_input.first.fill(fp_val)
                 time.sleep(1.5)  # wait for React dropdown
                 page.keyboard.press("ArrowDown")
@@ -603,117 +617,115 @@ def create_defect(
             _fill_aui_autocomplete(page, "#issuelinks-issues-textarea", tc_link, wait_ms=1500)
             time.sleep(0.3)
 
-        # 5. Demo (customfield_28800) — standard <select>
-        _fill_select(page, "#customfield_28800", config.get("demo", "Demo 1"))
+        # 5. Demo — standard <select>
+        _fill_select(page, _cf("demo"), config.get("demo"))
         time.sleep(0.2)
 
         # 6. Component/s — AUI multi-select textarea (type → dropdown → click)
-        _fill_aui_autocomplete(page, "#components-textarea", config.get("components", "Android"), wait_ms=1500)
+        _fill_aui_autocomplete(page, "#components-textarea", config.get("components"), wait_ms=1500)
         time.sleep(0.4)
 
-        # 7. Defect Severity (customfield_10704) — standard <select>
-        sev_val = priority or data.get("severity") or config.get("priority", "1-Low")
-        _fill_select(page, "#customfield_10704", sev_val)
+        # 7. Defect Severity — standard <select>
+        sev_val = priority or data.get("severity") or config.get("priority")
+        _fill_select(page, _cf("severity"), sev_val)
         time.sleep(0.2)
 
-        # 8. Test Cases Blocked (customfield_11406) — plain input
-        _fill_textarea(page, "#customfield_11406", str(data.get("blocked_tcs", "1")))
+        # 8. Test Cases Blocked — plain input
+        _fill_textarea(page, _cf("tcs_blocked"), str(data.get("blocked_tcs", "1")))
         time.sleep(0.2)
 
-        # 9. Impacted System (customfield_11414) — standard <select>
-        _fill_select(page, "#customfield_11414", config.get("impacted_system", "Mobile App"))
+        # 9. Impacted System — standard <select>
+        _fill_select(page, _cf("impacted_system"), config.get("impacted_system"))
         time.sleep(0.2)
 
-        # 10. Scenario (customfield_11518) — plain textarea
+        # 10. Scenario — plain textarea
         if data.get("scenario"):
-            _fill_textarea(page, "#customfield_11518", data["scenario"])
+            _fill_textarea(page, _cf("scenario"), data["scenario"])
             time.sleep(0.2)
 
-        # 11. Expected Result (customfield_11519) — plain textarea
+        # 11. Expected Result — plain textarea
         if data.get("expected"):
-            _fill_textarea(page, "#customfield_11519", data["expected"])
+            _fill_textarea(page, _cf("expected"), data["expected"])
             time.sleep(0.2)
 
-        # 12. Actual Result (customfield_11520) — plain textarea
+        # 12. Actual Result — plain textarea
         if data.get("actual"):
-            _fill_textarea(page, "#customfield_11520", data["actual"])
+            _fill_textarea(page, _cf("actual"), data["actual"])
             time.sleep(0.2)
 
-        # 13. Steps to Recreate (customfield_11521) — plain textarea
+        # 13. Steps to Recreate — plain textarea
         if data.get("steps"):
-            _fill_textarea(page, "#customfield_11521", data["steps"])
+            _fill_textarea(page, _cf("steps"), data["steps"])
             time.sleep(0.2)
 
-        # 14. Test Data (customfield_11523) — plain textarea
+        # 14. Test Data — plain textarea
         if data.get("test_data"):
-            _fill_textarea(page, "#customfield_11523", data["test_data"])
+            _fill_textarea(page, _cf("test_data"), data["test_data"])
             time.sleep(0.2)
 
-        # 15. QA Analysis (customfield_11522) — plain textarea
+        # 15. QA Analysis — plain textarea
         if data.get("qa_analysis"):
-            _fill_textarea(page, "#customfield_11522", data["qa_analysis"])
+            _fill_textarea(page, _cf("qa_analysis"), data["qa_analysis"])
             time.sleep(0.2)
 
         # 16. Defect Type & Filed Against — cascading <select>
-        # Select parent first (B2B Digital Revamp = value 41119)
-        _fill_select(page, "#customfield_11529", config.get("defect_type", "B2B Digital Revamp"))
+        # Select parent first
+        _fill_select(page, _cf("defect_type"), config.get("defect_type"))
         time.sleep(0.8)  # wait for child options to load after parent change
-        # Now select child (BDR-ANDROID = value 41813)
-        _fill_select(page, "select[name='customfield_11529:1']", config.get("filed_against", "BDR-ANDROID"))
+        # Now select child
+        _fill_select(page, _cf("defect_type", "select[name='{}:1']"), config.get("filed_against"))
         time.sleep(0.3)
 
         # 17. Assignee — AUI user-picker autocomplete
-        assignee_name = assignee or data.get("assignee") or config.get("assignee", "Saurabh Shukla")
+        assignee_name = assignee or data.get("assignee") or config.get("assignee")
         _fill_aui_autocomplete(page, "#assignee-field", assignee_name, wait_ms=1800)
         time.sleep(0.4)
 
-        # 18. Defect Environment (customfield_10707) — standard <select>
-        _fill_select(page, "#customfield_10707", config.get("defect_environment", "Integration"))
+        # 18. Defect Environment — standard <select>
+        _fill_select(page, _cf("environment"), config.get("defect_environment"))
         time.sleep(0.2)
 
-        # 19. Defect Phase (customfield_11404) — standard <select>
-        _fill_select(page, "#customfield_11404", config.get("defect_phase", "QA"))
+        # 19. Defect Phase — standard <select>
+        _fill_select(page, _cf("phase"), config.get("defect_phase"))
         time.sleep(0.2)
 
-        # 20. Usability Issue — radio button (No)
+        # 20. Usability Issue — radio button
         # Try both known ID patterns
-        usability_no = page.locator(
-            "#customfield_14106-2, "
-            "input[name='customfield_14106'][value='17440'], "
-            "input[name='customfield_14106'][value='No']"
-        )
-        if usability_no.count() > 0:
+        usability = config.get("usability_issue")
+        usability_sel = _cf("usability", "input[name='{}']")
+        if usability and usability_sel:
             try:
-                # Force check even if already checked
-                usability_no.first.scroll_into_view_if_needed()
-                usability_no.first.check(force=True)
-                time.sleep(0.2)
-                print("  [+] Usability Issue set to No")
+                radio = page.locator(usability_sel).locator(f"xpath=..//label[normalize-space()='{usability}']")
+                if radio.count() > 0:
+                    radio.first.scroll_into_view_if_needed()
+                    radio.first.click(force=True)
+                    time.sleep(0.2)
+                    print(f"  [+] Usability Issue set to {usability}")
             except Exception as ue:
                 print(f"  [!] Usability Issue note: {ue}")
 
         # 21. Labels — AUI label-picker autocomplete textarea
-        _fill_aui_autocomplete(page, "#labels-textarea", config.get("labels", "Lightmode"), wait_ms=1500)
+        _fill_aui_autocomplete(page, "#labels-textarea", config.get("labels"), wait_ms=1500)
         time.sleep(0.4)
 
-        # 22. Re-occurrence (customfield_15100) — standard <select>
-        _fill_select(page, "#customfield_15100", config.get("re_occurrence", "No"))
+        # 22. Re-occurrence — standard <select>
+        _fill_select(page, _cf("reoccurrence"), config.get("re_occurrence"))
         time.sleep(0.2)
 
-        # 23. NewStack Impact (customfield_28306) — standard <select>
-        _fill_select(page, "#customfield_28306", config.get("newstack_impact", "Legacy"))
+        # 23. NewStack Impact — standard <select>
+        _fill_select(page, _cf("newstack"), config.get("newstack_impact"))
         time.sleep(0.2)
 
-        # 24. Defect Category (customfield_28900) — standard <select>
-        _fill_select(page, "#customfield_28900", config.get("defect_category", "Defect"))
+        # 24. Defect Category — standard <select>
+        _fill_select(page, _cf("category"), config.get("defect_category"))
         time.sleep(0.2)
 
-        # 25. Milestone Type (customfield_18143) — standard <select>
-        _fill_select(page, "#customfield_18143", config.get("milestone_type", "Batch 1"))
+        # 25. Milestone Type — standard <select>
+        _fill_select(page, _cf("milestone"), config.get("milestone_type"))
         time.sleep(0.2)
 
-        # 26. UAT Priority (customfield_31100) — standard <select>
-        _fill_select(page, "#customfield_31100", config.get("uat_priority", "No"))
+        # 26. UAT Priority — standard <select>
+        _fill_select(page, _cf("uat_priority"), config.get("uat_priority"))
         time.sleep(0.2)
 
         # Attach screenshots to defect form
@@ -730,7 +742,7 @@ def create_defect(
                         print(f"  [!] Could not attach screenshots to form: {e}")
 
         # --- SUBMIT ISSUE ---
-        should_auto_submit = config.get("auto_submit_defect", False)
+        should_auto_submit = config.get("auto_submit_defect")
         
         if should_auto_submit:
             print("  -> Auto-submitting Defect Issue to Jira...")
@@ -754,7 +766,7 @@ def create_defect(
             except Exception:
                 pass
 
-        # Wait for created issue key (e.g. BDR-1234 or JK26-5678) after manual or auto submission
+        # Wait for created issue key after manual or auto submission
         issue_key = None
         try:
             if not should_auto_submit:
@@ -774,7 +786,7 @@ def create_defect(
             if "/browse/" in current_url:
                 issue_key = current_url.split("/browse/")[1].split("?")[0]
             else:
-                issue_key = f"{config.PROJECT_KEY}-DRAFT"
+                issue_key = f"{config.get('jira_project') or 'UNKNOWN'}-DRAFT"
 
         print(f"[SUCCESS] Defect issue '{issue_key}' processed in Jira!")
         # Browser intentionally left open — close it manually when done.
@@ -786,7 +798,7 @@ def add_comment_with_screenshots(issue_key: str, comment_text: str, screenshot_p
     Pre-fills a comment with screenshots attached on the given Jira defect issue.
     Does NOT auto-submit; leaves comment box open for user to review and click Save/Comment manually.
     """
-    if jira_rest.is_enabled() and config.get("auto_submit_defect", False):
+    if jira_rest.is_enabled() and config.get("auto_submit_defect"):
         return jira_rest.add_comment(issue_key, comment_text, screenshot_paths)
 
     valid_shots = [p for p in (screenshot_paths or []) if os.path.exists(p)]
@@ -794,7 +806,7 @@ def add_comment_with_screenshots(issue_key: str, comment_text: str, screenshot_p
     with sync_playwright() as p:
         browser, context = _get_context(p)
         page = context.new_page()
-        page.goto(f"{config.JIRA_BASE_URL}/browse/{issue_key}")
+        page.goto(f"{jira_rest.base_url()}/browse/{issue_key}")
         page.wait_for_load_state("domcontentloaded")
 
         try:
@@ -866,7 +878,7 @@ def fetch_te_from_jira(te_key: str) -> dict:
             print(f"[!] REST lookup failed ({e}); falling back to reading the page.")
 
     import re
-    url = f"{config.JIRA_BASE_URL}/browse/{te_key}"
+    url = f"{jira_rest.base_url()}/browse/{te_key}"
     print(f"[*] Navigating to Jira TE URL: {url}")
 
     with sync_playwright() as p:

@@ -15,27 +15,27 @@ import requests
 import config
 import secret_store
 
-# Field IDs used by the Defect create screen (same IDs the browser flow fills).
-FIELD_FOR_PROJECT = "customfield_24115"
-FIELD_DEMO = "customfield_28800"
-FIELD_SEVERITY = "customfield_10704"
-FIELD_TCS_BLOCKED = "customfield_11406"
-FIELD_IMPACTED_SYSTEM = "customfield_11414"
-FIELD_SCENARIO = "customfield_11518"
-FIELD_EXPECTED = "customfield_11519"
-FIELD_ACTUAL = "customfield_11520"
-FIELD_STEPS = "customfield_11521"
-FIELD_QA_ANALYSIS = "customfield_11522"
-FIELD_TEST_DATA = "customfield_11523"
-FIELD_DEFECT_TYPE = "customfield_11529"  # cascading: Defect Type -> Filed Against
-FIELD_ENVIRONMENT = "customfield_10707"
-FIELD_PHASE = "customfield_11404"
-FIELD_USABILITY = "customfield_14106"
-FIELD_REOCCURRENCE = "customfield_15100"
-FIELD_NEWSTACK = "customfield_28306"
-FIELD_CATEGORY = "customfield_28900"
-FIELD_MILESTONE = "customfield_18143"
-FIELD_UAT_PRIORITY = "customfield_31100"
+# Config keys holding the Jira custom field IDs (set on the Config page; empty = skip the field).
+FIELD_FOR_PROJECT = "field_for_project"
+FIELD_DEMO = "field_demo"
+FIELD_SEVERITY = "field_severity"
+FIELD_TCS_BLOCKED = "field_tcs_blocked"
+FIELD_IMPACTED_SYSTEM = "field_impacted_system"
+FIELD_SCENARIO = "field_scenario"
+FIELD_EXPECTED = "field_expected"
+FIELD_ACTUAL = "field_actual"
+FIELD_STEPS = "field_steps"
+FIELD_QA_ANALYSIS = "field_qa_analysis"
+FIELD_TEST_DATA = "field_test_data"
+FIELD_DEFECT_TYPE = "field_defect_type"
+FIELD_ENVIRONMENT = "field_environment"
+FIELD_PHASE = "field_phase"
+FIELD_USABILITY = "field_usability"
+FIELD_REOCCURRENCE = "field_reoccurrence"
+FIELD_NEWSTACK = "field_newstack"
+FIELD_CATEGORY = "field_category"
+FIELD_MILESTONE = "field_milestone"
+FIELD_UAT_PRIORITY = "field_uat_priority"
 
 
 class JiraRestError(Exception):
@@ -44,33 +44,36 @@ class JiraRestError(Exception):
 
 def is_enabled() -> bool:
     """REST mode is used when a token exists and the user hasn't forced browser mode."""
-    if str(config.get("jira_mode", "auto")).lower() == "browser":
+    if str(config.get("jira_mode")).lower() == "browser":
         return False
     return bool(secret_store.get_secret("jira_pat"))
 
 
-def _base_url() -> str:
-    return config.get("jira_base_url") or config.JIRA_BASE_URL
+def base_url() -> str:
+    url = config.get("jira_base_url")
+    if not url:
+        raise JiraRestError("Set the Jira base URL on the Config page.")
+    return url
 
 
 def _session() -> requests.Session:
     token = secret_store.get_secret("jira_pat")
     if not token:
-        raise JiraRestError("No Jira Personal Access Token configured (JIRA_PAT).")
+        raise JiraRestError("No Jira Personal Access Token set on the Config page.")
     s = requests.Session()
     s.headers.update({
         "Authorization": f"Bearer {token}",
         "Accept": "application/json",
     })
     # Corporate CA bundle, if the Jira host uses an internal certificate authority
-    ca_bundle = os.getenv("JIRA_CA_BUNDLE")
+    ca_bundle = config.get("jira_ca_bundle")
     if ca_bundle:
         s.verify = ca_bundle
     return s
 
 
 def _request(method: str, path: str, **kwargs):
-    url = f"{_base_url()}{path}"
+    url = f"{base_url()}{path}"
     kwargs.setdefault("timeout", 30)
     resp = _session().request(method, url, **kwargs)
     if resp.status_code >= 400:
@@ -201,7 +204,7 @@ def fetch_test_execution(te_key: str) -> dict | None:
         "te_key": te_key,
         "summary": fields.get("summary", ""),
         "test_cases": [{"key": k, "name": f"{k} {names.get(k, '')}".strip()} for k in keys],
-        "url": f"{_base_url()}/browse/{te_key}",
+        "url": f"{base_url()}/browse/{te_key}",
     }
 
 
@@ -211,10 +214,10 @@ def _project_key() -> str:
     explicit = config.get("jira_project")
     if explicit:
         return explicit
-    m = re.search(r"\(([A-Z][A-Z0-9_]+)\)", config.DEFECT_BOILERPLATE.get("project", ""))
+    m = re.search(r"\(([A-Z][A-Z0-9_]+)\)", config.get("project") or "")
     if m:
         return m.group(1)
-    raise JiraRestError("Set 'jira_project' (the Jira project key, e.g. BDR) in settings.")
+    raise JiraRestError("Set the Jira project key on the Config page.")
 
 
 def _create_meta(project_key: str, issue_type: str) -> tuple[str, dict]:
@@ -339,32 +342,32 @@ def create_defect(summary: str, description: str, screenshot_paths: list[str],
     """Creates the Defect over REST and returns its key. Mirrors jira_actions.create_defect."""
     data = data or {}
     project_key = _project_key()
-    issue_type = config.get("defect_issue_type") or config.DEFECT_ISSUE_TYPE
+    issue_type = config.get("defect_issue_type")
     type_id, meta = _create_meta(project_key, issue_type)
 
     wanted = {
-        FIELD_FOR_PROJECT: config.get("issue_key") or config.ISSUE_KEY,
-        FIELD_DEMO: config.get("demo", "Demo 1"),
-        "components": config.get("components", "Android"),
-        FIELD_SEVERITY: priority or data.get("severity") or config.get("priority", "1-Low"),
+        FIELD_FOR_PROJECT: config.get("issue_key"),
+        FIELD_DEMO: config.get("demo"),
+        "components": config.get("components"),
+        FIELD_SEVERITY: priority or data.get("severity") or config.get("priority"),
         FIELD_TCS_BLOCKED: str(data.get("blocked_tcs", "1")),
-        FIELD_IMPACTED_SYSTEM: config.get("impacted_system", "Mobile App"),
+        FIELD_IMPACTED_SYSTEM: config.get("impacted_system"),
         FIELD_SCENARIO: data.get("scenario"),
         FIELD_EXPECTED: data.get("expected"),
         FIELD_ACTUAL: data.get("actual"),
         FIELD_STEPS: data.get("steps"),
         FIELD_TEST_DATA: data.get("test_data"),
         FIELD_QA_ANALYSIS: data.get("qa_analysis"),
-        FIELD_DEFECT_TYPE: (config.get("defect_type", "B2B Digital Revamp"), config.get("filed_against", "BDR-ANDROID")),
-        FIELD_ENVIRONMENT: config.get("defect_environment", "Integration"),
-        FIELD_PHASE: config.get("defect_phase", "QA"),
-        FIELD_USABILITY: config.get("usability_issue", "No"),
-        "labels": config.get("labels", "Lightmode"),
-        FIELD_REOCCURRENCE: config.get("re_occurrence", "No"),
-        FIELD_NEWSTACK: config.get("newstack_impact", "Legacy"),
-        FIELD_CATEGORY: config.get("defect_category", "Defect"),
-        FIELD_MILESTONE: config.get("milestone_type", "Batch 1"),
-        FIELD_UAT_PRIORITY: config.get("uat_priority", "No"),
+        FIELD_DEFECT_TYPE: (config.get("defect_type"), config.get("filed_against")),
+        FIELD_ENVIRONMENT: config.get("defect_environment"),
+        FIELD_PHASE: config.get("defect_phase"),
+        FIELD_USABILITY: config.get("usability_issue"),
+        "labels": config.get("labels"),
+        FIELD_REOCCURRENCE: config.get("re_occurrence"),
+        FIELD_NEWSTACK: config.get("newstack_impact"),
+        FIELD_CATEGORY: config.get("defect_category"),
+        FIELD_MILESTONE: config.get("milestone_type"),
+        FIELD_UAT_PRIORITY: config.get("uat_priority"),
     }
 
     fields = {
@@ -377,8 +380,12 @@ def create_defect(summary: str, description: str, screenshot_paths: list[str],
 
     skipped = []
     for field_id, value in wanted.items():
-        if value in (None, "", []):
+        if value in (None, "", []) or (isinstance(value, tuple) and not value[0]):
             continue
+        if field_id.startswith("field_"):
+            field_id = config.get(field_id)
+            if not field_id:
+                continue
         if field_id not in meta:
             skipped.append(field_id)
             continue

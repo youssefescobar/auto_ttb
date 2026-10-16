@@ -2,7 +2,7 @@ import os
 import json
 import time
 import threading
-from flask import Flask, request, jsonify, send_file, send_from_directory, render_template
+from flask import Flask, request, jsonify, send_file, send_from_directory, render_template, redirect
 from pathlib import Path
 from datetime import datetime
 
@@ -34,7 +34,18 @@ def add_cors_headers(response):
 
 @app.route('/')
 def index():
+    if config.missing_required():
+        return redirect('/config')
     return render_template('index.html')
+
+@app.route('/config')
+def config_page():
+    return render_template('config.html')
+
+@app.route('/api/config-schema', methods=['GET'])
+def api_config_schema():
+    return jsonify({"sections": config.schema(), "missing": config.missing_required(),
+                    "keyring": secret_store.has_keyring()})
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
@@ -54,12 +65,7 @@ def api_session_status():
 @app.route('/api/settings', methods=['GET', 'POST'])
 def api_settings():
     if request.method == 'GET':
-        all_settings = config.get_all_settings()
-        all_settings.pop('gemini_api_key', None)
-        all_settings.pop('jira_pat', None)
-        all_settings['jira_token_set'] = bool(secret_store.get_secret('jira_pat'))
-        all_settings.pop('gemini_model', None)
-        return jsonify(all_settings)
+        return jsonify(config.get_all_settings())
 
     data = request.json or {}
     # Secrets go to the OS credential store, never to settings_overrides.json
@@ -67,8 +73,8 @@ def api_settings():
         if secret_key in data:
             value = data.pop(secret_key)
             if not secret_store.set_secret(secret_key, value):
-                return jsonify({"error": f"Cannot store {secret_key}: install 'keyring' or set it in .env"}), 400
-    config.set_overrides(data)
+                return jsonify({"error": f"Cannot store {secret_key}: the OS credential store is unavailable"}), 400
+    config.set_overrides({k: v for k, v in data.items() if k in config.DEFAULTS})
     return jsonify({"status": "updated"})
 
 # --- Screenshot handling with expected vs actual categories ---
@@ -174,7 +180,7 @@ def api_generate_defect():
         actual_shots = []
         
         # Check AI screenshot sharing setting (UI option remains, but functionality is disabled)
-        # if not config.get('share_screenshots_with_ai', True):
+        # if not config.get("share_screenshots_with_ai"):
         #     expected_shots = []
         #     actual_shots = []
 
@@ -260,7 +266,7 @@ def api_pass_tc():
 
         saved_pot = False
         # Auto append to POT only if auto_save_pot is enabled
-        if config.get('auto_save_pot', False):
+        if config.get("auto_save_pot"):
             poc_doc.append_tc_pot(
                 tc_number=tc_name,
                 status="PASS",
@@ -274,7 +280,7 @@ def api_pass_tc():
         target_jira_key = tc_number or tc_key
         if target_jira_key and ("-" in str(target_jira_key) or str(target_jira_key).startswith("QA-") or str(target_jira_key).startswith("TC-")):
             try:
-                jira_actions.transition_tc(target_jira_key, config.get('transition_pass', 'Pass'))
+                jira_actions.transition_tc(target_jira_key, config.get("transition_pass"))
             except Exception as e:
                 print(f"[!] Transition warning: {e}")
         else:

@@ -225,7 +225,7 @@ h1, h2, h3, h4, h5 {
 }
 
 /* Forms & Inputs */
-input[type="text"], input[type="number"], textarea, select {
+input[type="text"], input[type="number"], input[type="password"], textarea, select {
   width: 100%;
   background: var(--bg-input);
   border: 1px solid var(--border);
@@ -731,3 +731,10 @@ input:focus, textarea:focus, select:focus {
   font-weight: 600;
   letter-spacing: 0.05em;
 }
+
+/* Config page */
+.config-page { max-width: 760px; }
+.config-section { margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+.config-section h2 { font-size: 1rem; margin-bottom: 1rem; }
+.config-banner { margin-bottom: 2rem; padding: 0.75rem 1rem; border: 1px solid var(--amber); border-radius: var(--radius-sm); color: var(--amber); }
+.config-actions { position: sticky; bottom: 0; padding: 1rem 0; background: var(--bg); display: flex; justify-content: flex-end; }

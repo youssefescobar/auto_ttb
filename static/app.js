@@ -81,19 +81,20 @@ function updateFixedFieldsDisplay() {
   const list = document.querySelector('.fixed-fields-list');
   if (!list) return;
   const s = state.settings;
+  const v = (key) => s[key] || '—';
   list.innerHTML = `
-    <li><b>Project:</b> ${s.project || 'My Project Name'}</li>
-    <li><b>Issue Type:</b> ${s.issue_type || 'Defect'}</li>
-    <li><b>For Project:</b> ${s.for_project || 'PROJ-1234 Technical project...'}</li>
-    <li><b>Demo:</b> ${s.demo || 'Demo 1'}</li>
-    <li><b>Component/s:</b> ${s.components || 'Component'}</li>
-    <li><b>Impacted System:</b> ${s.impacted_system || 'System'}</li>
-    <li><b>Defect Type:</b> ${s.defect_type || 'Defect Type'}</li>
-    <li><b>Filed Against:</b> ${s.filed_against || 'Team'}</li>
-    <li><b>Environment:</b> ${s.defect_environment || 'Environment'}</li>
-    <li><b>Defect Phase:</b> ${s.defect_phase || 'QA'}</li>
-    <li><b>Labels:</b> ${s.labels || 'Lightmode'}</li>
-    <li><b>Usability / Re-occurrence:</b> No / No</li>
+    <li><b>Project:</b> ${v('project')}</li>
+    <li><b>Issue Type:</b> ${v('defect_issue_type')}</li>
+    <li><b>For Project:</b> ${v('for_project')}</li>
+    <li><b>Demo:</b> ${v('demo')}</li>
+    <li><b>Component/s:</b> ${v('components')}</li>
+    <li><b>Impacted System:</b> ${v('impacted_system')}</li>
+    <li><b>Defect Type:</b> ${v('defect_type')}</li>
+    <li><b>Filed Against:</b> ${v('filed_against')}</li>
+    <li><b>Environment:</b> ${v('defect_environment')}</li>
+    <li><b>Defect Phase:</b> ${v('defect_phase')}</li>
+    <li><b>Labels:</b> ${v('labels')}</li>
+    <li><b>Usability / Re-occurrence:</b> ${v('usability_issue')} / ${v('re_occurrence')}</li>
   `;
 }
 
@@ -140,100 +141,47 @@ function dismissToast(toast) {
   }, 300);
 }
 
-// Settings
+// Settings (edited on the /config page)
 async function loadSettings() {
   try {
     state.settings = await api('GET', '/api/settings');
-    const form = $('#settings-form');
-    for (const [key, val] of Object.entries(state.settings)) {
-      const el = form.elements[key];
-      if (el && el.type !== 'password') {
-        if (el.type === 'checkbox') {
-          el.checked = Boolean(val);
-        } else {
-          el.value = Array.isArray(val) ? val.join(', ') : (val ?? '');
-        }
-      }
-    }
-    const tokenInput = form.elements['jira_pat'];
-    if (tokenInput) tokenInput.placeholder = state.settings.jira_token_set ? 'Token saved (type to replace)' : 'Paste a Jira Personal Access Token';
     updateFixedFieldsDisplay();
-    await loadSettingsHistory();
+    fillOptions('#te-env-select', state.settings.environments);
+    fillOptions('#te-lang-select', state.settings.languages);
+    const minDelay = $('#batch-min-delay');
+    const maxDelay = $('#batch-max-delay');
+    if (minDelay) minDelay.value = state.settings.draft_delay_min_seconds;
+    if (maxDelay) maxDelay.value = state.settings.draft_delay_max_seconds;
   } catch (e) {
     console.error('Failed to load settings:', e);
   }
 }
 
-async function loadSettingsHistory() {
-  try {
-    const history = await api('GET', '/api/settings-history');
-    state.settingsHistory = history || {};
-    // Populate all history dropdowns
-    document.querySelectorAll('.history-dropdown').forEach(select => {
-      const fieldName = select.dataset.for;
-      if (!fieldName) return;
-      const options = history[fieldName] || [];
-      // Clear existing options beyond the placeholder
-      select.innerHTML = '<option value="">\u2014 saved \u2014</option>';
-      if (options.length > 0) {
-        options.forEach(opt => {
-          const optEl = document.createElement('option');
-          optEl.value = opt;
-          optEl.textContent = opt.length > 30 ? opt.substring(0, 30) + '...' : opt;
-          optEl.title = opt;
-          select.appendChild(optEl);
-        });
-        select.classList.remove('hidden');
-      } else {
-        select.classList.add('hidden');
-      }
-    });
-  } catch (e) {
-    console.error('Failed to load settings history:', e);
+// Fills a <select> from a comma-separated setting, keeping any current value.
+function fillOptions(selector, csv) {
+  const select = $(selector);
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = '';
+  for (const opt of String(csv || '').split(',').map(o => o.trim()).filter(Boolean)) {
+    select.add(new Option(opt, opt));
   }
+  if (current) setSelectValue(select, current);
 }
 
-async function saveSettings() {
-  const form = $('#settings-form');
-  const data = {};
-  for (const el of form.elements) {
-    if (!el.name) continue;
-    if (el.classList && el.classList.contains('history-dropdown')) continue;
-    if (el.type === 'password') continue; // secrets are sent separately below
-    if (el.type === 'checkbox') {
-      data[el.name] = el.checked;
-    } else {
-      data[el.name] = el.value;
-    }
-  }
-  
-  // Only send a secret when the user typed a new one; it never goes into history.
-  const secrets = {};
-  for (const el of form.elements) {
-    if (el.type === 'password' && el.name && el.value.trim()) secrets[el.name] = el.value.trim();
-  }
-
-  try {
-    await api('POST', '/api/settings', { ...data, ...secrets });
-    for (const el of form.elements) { if (el.type === 'password') el.value = ''; }
-    // Save values as history options for future quick switching
-    const historyData = {};
-    for (const [key, val] of Object.entries(data)) {
-      if (typeof val === 'string' && val.trim()) {
-        historyData[key] = val.trim();
-      }
-    }
-    await api('POST', '/api/settings-history', historyData);
-    state.settings = { ...state.settings, ...data };
-    updateFixedFieldsDisplay();
-    showToast('\u2705 Settings saved', 'success');
-    toggleSettings(false);
-    await loadSettingsHistory();
-  } catch (e) {
-    showToast(e.message || 'Failed to save settings', 'error');
-  }
+function setSelectValue(select, value) {
+  if (![...select.options].some(o => o.value === value)) select.add(new Option(value, value));
+  select.value = value;
 }
 
+function jiraBrowseUrl(key) {
+  const baseUrl = state.settings && state.settings.jira_base_url;
+  if (!baseUrl) {
+    showToast('Set the Jira base URL on the Config page first', 'error');
+    return null;
+  }
+  return `${baseUrl.replace(/\/$/, '')}/browse/${key}`;
+}
 
 async function checkSession() {
   try {
@@ -305,20 +253,6 @@ async function handleSaveSession() {
     showToast(`Save failed: ${e.message}`, 'error');
   } finally {
     if (saveBtn) saveBtn.disabled = false;
-  }
-}
-
-function toggleSettings(forceOpen) {
-  const panel = $('#settings-panel');
-  const overlay = $('#settings-overlay');
-  const isOpen = panel.classList.contains('open');
-  if (forceOpen === true || (!isOpen && forceOpen !== false)) {
-    show(overlay);
-    show(panel);
-    setTimeout(() => panel.classList.add('open'), 10);
-  } else {
-    panel.classList.remove('open');
-    setTimeout(() => { hide(overlay); hide(panel); }, 300);
   }
 }
 
@@ -497,11 +431,11 @@ async function loadTE(teKey) {
     
     const envSelect = $('#te-env-select');
     if (envSelect && saved.environment) {
-      envSelect.value = saved.environment;
+      setSelectValue(envSelect, saved.environment);
     }
     const langSelect = $('#te-lang-select');
     if (langSelect && saved.language) {
-      langSelect.value = saved.language;
+      setSelectValue(langSelect, saved.language);
     }
     
     const linkToggle = $('#te-link-toggle');
@@ -798,9 +732,8 @@ function openJiraTC(tcKey) {
     }
   }
 
-  const baseUrl = (state.settings && state.settings.jira_base_url) ? state.settings.jira_base_url : 'https://jira.company.com';
-  const url = `${baseUrl.replace(/\/$/, '')}/browse/${tcNumber}`;
-  window.open(url, '_blank');
+  const url = jiraBrowseUrl(tcNumber);
+  if (url) window.open(url, '_blank');
 }
 
 async function loadExistingScreenshots(tcKey) {
@@ -1762,9 +1695,8 @@ function openJiraTE() {
     showToast('Please enter or select a TE Key first', 'error');
     return;
   }
-  const baseUrl = (state.settings && state.settings.jira_base_url) ? state.settings.jira_base_url : 'https://jira.company.com';
-  const url = `${baseUrl.replace(/\/$/, '')}/browse/${key}`;
-  window.open(url, '_blank');
+  const url = jiraBrowseUrl(key);
+  if (url) window.open(url, '_blank');
 }
 
 async function fetchJiraTE() {
@@ -1844,17 +1776,9 @@ document.addEventListener('DOMContentLoaded', () => {
   setupDropZone('actual');
   setupPasteHandler();
 
-  const btnSettings = $('#btn-settings');
-  if (btnSettings) btnSettings.addEventListener('click', () => toggleSettings(true));
   
-  const btnCloseSettings = $('#btn-close-settings');
-  if (btnCloseSettings) btnCloseSettings.addEventListener('click', () => toggleSettings(false));
   
-  const settingsOverlay = $('#settings-overlay');
-  if (settingsOverlay) settingsOverlay.addEventListener('click', () => toggleSettings(false));
   
-  const btnSaveSettings = $('#btn-save-settings');
-  if (btnSaveSettings) btnSaveSettings.addEventListener('click', saveSettings);
   
   const btnLogin = $('#btn-login');
   if (btnLogin) btnLogin.addEventListener('click', handleLogin);
@@ -2050,20 +1974,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const btnCancelBatch = $('#btn-cancel-batch');
   if (btnCancelBatch) btnCancelBatch.addEventListener('click', cancelBatch);
-
-  // Settings History Dropdowns — when a saved option is selected, fill the input
-  document.querySelectorAll('.history-dropdown').forEach(select => {
-    select.addEventListener('change', (e) => {
-      const fieldName = select.dataset.for;
-      if (!fieldName || !e.target.value) return;
-      const input = document.querySelector(`input[name="${fieldName}"]`);
-      if (input) {
-        input.value = e.target.value;
-        input.dispatchEvent(new Event('input'));
-      }
-      select.value = ''; // Reset dropdown to placeholder
-    });
-  });
 
   setupAutoResize('#defect-form textarea');
 

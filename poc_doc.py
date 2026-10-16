@@ -330,7 +330,7 @@ def append_tc_pot(
     Appends a compact TC result to the POT doc, enabling 3 TCs per page.
     """
     if not te_key:
-        te_key = config.DEFAULT_TE_KEY
+        te_key = config.get("default_te_key") or "GENERAL"
 
     expected_shots = [p for p in (expected_shots or []) if os.path.exists(p)]
     actual_shots = [p for p in (actual_shots or []) if os.path.exists(p)]
