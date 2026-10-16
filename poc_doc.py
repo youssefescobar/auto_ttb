@@ -330,7 +330,7 @@ def append_tc_pot(
     Appends a compact TC result to the POT doc, enabling 3 TCs per page.
     """
     if not te_key:
-        te_key = config.get("default_te_key") or "GENERAL"
+        te_key = "GENERAL"
 
     expected_shots = [p for p in (expected_shots or []) if os.path.exists(p)]
     actual_shots = [p for p in (actual_shots or []) if os.path.exists(p)]
@@ -549,15 +549,3 @@ def append_tc_pot(
     doc.save(doc_path)
     print(f"  -> {tc_number} POT entry saved to {doc_path}")
     return doc_path
-    return doc_path
-
-def append_pass(tc_key: str, screenshot_paths: list[str] = None, te_key: str = None, summary: str = ""):
-    """Helper for pass workflow in CLI/main.py."""
-    return append_tc_pot(
-        tc_number=tc_key,
-        status="PASS",
-        te_key=te_key,
-        summary=summary or "Test Case Passed",
-        actual_shots=screenshot_paths
-    )
-

@@ -132,15 +132,6 @@ def get_login_status():
             status["rest_error"] = str(e)
     return status
 
-def login_and_save_session():
-    """CLI wrapper: launches browser, waits for Enter in terminal, saves session."""
-    print(f"Opening browser to {jira_rest.base_url()}...")
-    start_login_session()
-    time.sleep(3)
-    input("\n--> Log in manually in the opened browser window, then press Enter here to save session...")
-    save_login_session()
-
-
 def get_timeouts():
     speed = config.get("network_speed")
     if speed == "Fast":
@@ -967,7 +958,3 @@ def fetch_te_from_jira(te_key: str) -> dict:
             "test_cases": tcs_list,
             "url": url
         }
-
-
-if __name__ == "__main__":
-    login_and_save_session()

@@ -86,7 +86,11 @@ async function render() {
   const form = $('#config-form');
   form.replaceChildren();
   for (const section of schema.sections) {
-    const card = el('section', { class: 'card config-section' }, el('h2', {}, section.title));
+    // "Advanced: ..." sections start collapsed
+    const advanced = section.title.startsWith('Advanced');
+    const card = advanced
+      ? el('details', { class: 'card config-section' }, el('summary', {}, el('h2', {}, section.title)))
+      : el('section', { class: 'card config-section' }, el('h2', {}, section.title));
     if (section.fields.some(f => f.key.startsWith('field_'))) {
       const btn = el('button', { type: 'button', class: 'btn btn-sm btn-outline' }, '🔍 Detect from Jira');
       btn.addEventListener('click', () => detectFields(btn));

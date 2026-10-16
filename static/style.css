@@ -610,8 +610,6 @@ input:focus, textarea:focus, select:focus {
 }
 .draft-queue-header h3 { font-size: 0.95rem; font-weight: 500; margin: 0; }
 .draft-queue-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-.draft-delay-config { display: flex; align-items: center; gap: 0.25rem; }
-.draft-delay-config input { text-align: center; }
 .draft-badge {
   display: inline-flex; align-items: center; justify-content: center;
   background: rgba(99, 102, 241, 0.25); color: #a5b4fc;
@@ -736,5 +734,8 @@ input:focus, textarea:focus, select:focus {
 .config-page { max-width: 760px; }
 .config-section { margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
 .config-section h2 { font-size: 1rem; margin-bottom: 1rem; }
+details.config-section > summary { cursor: pointer; list-style-position: inside; }
+details.config-section > summary h2 { display: inline; }
+details.config-section[open] > summary { margin-bottom: 1rem; }
 .config-banner { margin-bottom: 2rem; padding: 0.75rem 1rem; border: 1px solid var(--amber); border-radius: var(--radius-sm); color: var(--amber); }
 .config-actions { position: sticky; bottom: 0; padding: 1rem 0; background: var(--bg); display: flex; justify-content: flex-end; }

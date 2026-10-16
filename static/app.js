@@ -148,10 +148,6 @@ async function loadSettings() {
     updateFixedFieldsDisplay();
     fillOptions('#te-env-select', state.settings.environments);
     fillOptions('#te-lang-select', state.settings.languages);
-    const minDelay = $('#batch-min-delay');
-    const maxDelay = $('#batch-max-delay');
-    if (minDelay) minDelay.value = state.settings.draft_delay_min_seconds;
-    if (maxDelay) maxDelay.value = state.settings.draft_delay_max_seconds;
   } catch (e) {
     console.error('Failed to load settings:', e);
   }
@@ -1421,20 +1417,14 @@ async function submitAllDrafts() {
     return;
   }
 
-  const minDelay = parseInt($('#batch-min-delay')?.value || '120');
-  const maxDelay = parseInt($('#batch-max-delay')?.value || '300');
-
   if (!confirm(
     `🚀 Submit ${state.draftQueue.length} draft(s) to Jira?\n\n` +
-    `Each defect will be raised with a ${minDelay}–${maxDelay}s random delay between them to look natural.\n\n` +
-    `This runs in the background — you can keep working.`
+    `They are raised one after another in the background — you can keep working.`
   )) return;
 
   try {
     await api('POST', '/api/submit-all-drafts', {
       te_key: state.teKey,
-      min_delay_seconds: minDelay,
-      max_delay_seconds: maxDelay,
     });
     showToast(`🚀 Batch submission started! ${state.draftQueue.length} defects queued.`, 'success');
 

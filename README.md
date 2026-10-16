@@ -1,6 +1,6 @@
 # QA / JIRA Automation — Setup & User Guide
 
-Automated workflow CLI tool for QA manual testing. Captures screenshots from the Windows clipboard, generates defect documentation with **Google Gemini AI**, logs/transitions test cases in Jira, and maintains individual Proof of Completion (PoC) Word documents per Test Execution (TE).
+Local web app for QA manual testing. Collects test evidence screenshots, generates defect documentation with **Google Gemini AI**, logs/transitions test cases in Jira, and maintains individual Proof of Completion (PoC) Word documents per Test Execution (TE).
 
 ---
 
@@ -10,11 +10,10 @@ Automated workflow CLI tool for QA manual testing. Captures screenshots from the
 auto_ttb/
 ├── config.py                 # Settings list (edited on the web Config page)
 ├── app.py                    # Web app (run this)
-├── main.py                   # Main CLI test execution driver
 ├── defect_draft.py           # Gemini AI title & defect description generator
-├── jira_actions.py           # Playwright Jira UI actions & session management
+├── jira_actions.py           # Jira actions: REST first, Playwright page automation as fallback
+├── jira_rest.py              # Jira REST API client (token or saved Jira login)
 ├── poc_doc.py                # Word document generation per TE
-├── screenshot.py             # Clipboard image grabber
 ├── settings_overrides.json   # Settings saved from the Config page
 └── executions/               # Organized test output directory
     └── TE-101/               # Test Execution Folder
@@ -66,7 +65,7 @@ There is no setup script and nothing company-specific is built in. Start the web
 python app.py
 ```
 
-The app sends you to the Config page until the Jira base URL is set. Everything lives there: Jira URL, token and mode, Gemini key and model, project and defect field values, title pattern, workflow transitions, batch timing and the Jira custom field IDs. Secrets (Jira token, Gemini key) go to the OS credential store; everything else is saved to `settings_overrides.json`. Values in an existing `.env` are still read as a fallback.
+The app sends you to the Config page until the Jira base URL is set. Everything lives there: Jira URL, token and mode, Gemini key and model, project and defect field values, title pattern, the pass transition, and (under the collapsed *Advanced* sections) browser-mode options and the Jira custom field IDs. Secrets (Jira token, Gemini key) go to the OS credential store; everything else is saved to `settings_overrides.json`. Values in an existing `.env` are still read as a fallback.
 
 ---
 
@@ -90,25 +89,12 @@ The web app's Flask debugger is off by default; set `FLASK_DEBUG=1` only while d
 
 ---
 
-## Daily Execution Workflow
+## Daily Workflow
 
-Execute a Test Case using main.py:
+Everything happens in the web app (`python app.py`, then http://127.0.0.1:5000):
 
-```bash
-# Explicitly specifying TE key and TC key:
-python main.py --te TE-101 TC-123
-
-# Or simply specify TC key (prompts for TE key or uses default TE):
-python main.py TC-123
-```
-
-### Execution Flow:
-
-1. **Start Execution:** Automatically transitions Jira TC to *Start Progress*.
-2. **Choose Result:**
-   - **Pass (`p`):** Snip proof screenshots (`Ctrl+C` -> press `Enter` in CLI). Automatically appends the images and TC section into `executions/<TE_KEY>/poc_report_<TE_KEY>.docx` and marks TC *Pass*.
-   - **Fail (`f`):** Enter brief notes and grab defect screenshots.
-3. **AI Defect Generation & Review:**
-   - Gemini generates a concise bug summary title matching your pattern (e.g. `[TE-101][TC-123] Submit button fails on click`).
-   - Gemini drafts Scenario, Expected, and Actual sections.
-   - **Interactive Review:** Displays both Title and Body, allowing you to accept as-is, edit the title, edit the description body, or cancel before filing to Jira.
+1. **Load a Test Execution:** enter its key and fetch its test cases from Jira.
+2. **Collect evidence:** add *Expected* and *Actual* screenshots to a test case (upload or paste).
+3. **Pass:** marks the TC *Pass* in Jira and, if enabled, appends it to the TE's Proof of Testing document (`executions/<TE_KEY>/poc_report_<TE_KEY>.docx`).
+4. **Fail:** write short notes; Gemini drafts the defect title, scenario, steps, expected and actual results. Review and edit, then file it now or save it to the draft queue and **Raise All** later.
+5. **Proof of Testing:** rebuild or download the Word document for the TE at any time.
