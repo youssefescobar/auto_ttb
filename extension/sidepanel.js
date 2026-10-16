@@ -493,7 +493,8 @@ function tcItem(tc) {
   const details = h("details", { class: "tc", open }, header);
   if (!open) return details;
 
-  details.append(
+  // append() would print null as text, so drop the empty slots
+  details.append(...[
     ISSUE_KEY.test(tc.key) ? h("a", { href: jira().issueUrl(tc.key), target: "_blank" }, "Open in Jira ↗") : null,
     shotSection(tc, "expected"),
     shotSection(tc, "actual"),
@@ -507,10 +508,10 @@ function tcItem(tc) {
           ? h("button", { onclick: () => { state.defectOpen = tc.key; render(); } }, tc.draft ? "Edit draft" : "Report defect")
           : null)),
     h("div", { class: "row actions" },
-      h("button", { class: "pass", onclick: () => busy("pass", () => setStatus(tc.key, "pass")) }, "Pass"),
-      h("button", { class: "fail", onclick: () => busy("fail", () => setStatus(tc.key, "fail")) }, "Fail"),
-      h("button", { onclick: () => busy("blocked", () => setStatus(tc.key, "blocked")) }, "Blocked"),
-      h("button", { onclick: () => busy("executing", () => setStatus(tc.key, "executing")) }, "Executing"),
+      h("button", { class: `pass${tc.status === "pass" ? " current" : ""}`, onclick: () => busy("pass", () => setStatus(tc.key, "pass")) }, "Pass"),
+      h("button", { class: `fail${tc.status === "fail" ? " current" : ""}`, onclick: () => busy("fail", () => setStatus(tc.key, "fail")) }, "Fail"),
+      h("button", { class: tc.status === "blocked" ? "current" : null, onclick: () => busy("blocked", () => setStatus(tc.key, "blocked")) }, "Blocked"),
+      h("button", { class: tc.status === "executing" ? "current" : null, onclick: () => busy("executing", () => setStatus(tc.key, "executing")) }, "Executing"),
       tc.status !== "pending" ? h("button", { class: "link", onclick: () => busy("reset", () => setStatus(tc.key, "pending")) }, "Reset") : null,
       h("button", {
         class: "link danger", onclick: async () => {
@@ -524,7 +525,7 @@ function tcItem(tc) {
       }, "Remove"),
     ),
     state.defectOpen === tc.key ? defectEditor(tc) : null,
-  );
+  ].filter(Boolean));
   return details;
 }
 

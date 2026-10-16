@@ -85,3 +85,4 @@ header strong { flex: 1; font-size: 15px; }
 .queue { margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: var(--soft); border: 1px solid var(--line); }
 form details > summary { cursor: pointer; font-weight: 600; margin: 10px 0; }
 .sticky-save { position: sticky; bottom: 0; background: var(--bg); padding: 10px 0; border-top: 1px solid var(--line); }
+.actions button.current { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--fg); font-weight: 600; }
