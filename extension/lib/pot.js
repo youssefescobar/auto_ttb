@@ -12,6 +12,7 @@ const STATUS_COLORS = {
   FAIL: ["FEE2E2", "991B1B"],
   PENDING: ["FEF3C7", "D97706"],
   BLOCKED: ["F3E8FF", "A855F7"],
+  EXECUTING: ["DBEAFE", "1D4ED8"],
 };
 const PAGE_WIDTH = 10800; // twips inside 0.45" margins on A4/Letter
 const IMG_MAX_H = 170; // px

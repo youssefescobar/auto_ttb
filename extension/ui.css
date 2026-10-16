@@ -1,6 +1,6 @@
 :root {
   --bg: #ffffff; --fg: #0f172a; --muted: #64748b; --line: #e2e8f0; --soft: #f8fafc;
-  --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706; --blocked: #a855f7;
+  --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706; --blocked: #a855f7; --executing: #2563eb;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -59,7 +59,7 @@ header strong { flex: 1; font-size: 15px; }
 .tc .key { font-weight: 600; white-space: nowrap; }
 .tc .summary { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--warn); }
-.dot.pass { background: var(--pass); } .dot.fail { background: var(--fail); } .dot.blocked { background: var(--blocked); }
+.dot.pass { background: var(--pass); } .dot.fail { background: var(--fail); } .dot.blocked { background: var(--blocked); } .dot.executing { background: var(--executing); }
 
 .shots { border: 1px dashed var(--line); border-radius: 8px; padding: 6px 8px; margin: 8px 0; }
 .shots.paste-target { border-color: var(--accent); }

@@ -2,8 +2,6 @@
 
 export const DEFAULTS = {
   jira_base_url: "",
-  transition_pass: "Pass",
-  transition_fail: "",
   comment_evidence: false,
   environments: "SIT, UAT, PP, Prod",
   languages: "English, Arabic",

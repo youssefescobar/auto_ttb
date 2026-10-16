@@ -41,16 +41,6 @@ test("Jira error messages are surfaced", async () => {
   await assert.rejects(jira.fetchTestExecution("QA-1"), /Issue does not exist/);
 });
 
-test("transitions by name or target status, and lists what is available otherwise", async () => {
-  const { jira, calls } = fakeJira({
-    "GET /rest/api/2/issue/QA-2/transitions": () => [200, { transitions: [{ id: "11", name: "Start Progress" }, { id: "21", name: "Mark passed", to: { name: "Pass" } }] }],
-    "POST /rest/api/2/issue/QA-2/transitions": () => [204],
-  });
-  await jira.transition("QA-2", "pass");
-  assert.deepEqual(JSON.parse(calls.at(-1).init.body), { transition: { id: "21" } });
-  await assert.rejects(jira.transition("QA-2", "Fail"), /available: Start Progress, Mark passed/);
-});
-
 test("test execution: Xray tests first, summaries looked up in one search", async () => {
   const { jira, calls } = fakeJira({
     "GET /rest/api/2/issue/QA-1": () => [200, { fields: { summary: "Sprint 5 run", issuelinks: [] } }],
