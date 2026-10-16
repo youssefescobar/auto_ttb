@@ -73,3 +73,15 @@ header strong { flex: 1; font-size: 15px; }
 
 #toast { position: fixed; left: 10px; right: 10px; bottom: 10px; padding: 8px 10px; border-radius: 8px; background: var(--fg); color: var(--bg); box-shadow: 0 4px 12px rgb(0 0 0 / .2); }
 #toast.error { background: var(--fail); color: #fff; }
+
+.grow { flex: 1; width: auto; }
+.defect { border: 1px solid var(--fail); border-radius: 8px; padding: 8px 10px; margin: 10px 0; background: var(--bg); }
+.defect label { margin: 6px 0; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 80px; gap: 6px; align-items: end; }
+.grid3 label { margin: 0; }
+.grid3 select, .grid3 input { width: 100%; }
+.dups { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 6px; }
+.dups .row { margin: 4px 0; flex-wrap: nowrap; }
+.queue { margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: var(--soft); border: 1px solid var(--line); }
+form details > summary { cursor: pointer; font-weight: 600; margin: 10px 0; }
+.sticky-save { position: sticky; bottom: 0; background: var(--bg); padding: 10px 0; border-top: 1px solid var(--line); }

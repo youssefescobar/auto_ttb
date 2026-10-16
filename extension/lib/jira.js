@@ -46,7 +46,9 @@ export class Jira {
       if (resp.status === 403 && /XSRF/i.test(text)) {
         detail = "Jira's XSRF check rejected the request. Reload the extension and try again.";
       }
-      throw new JiraError(`${method} ${path} failed (HTTP ${resp.status}): ${detail}`, resp.status);
+      const err = new JiraError(`${method} ${path} failed (HTTP ${resp.status}): ${detail}`, resp.status);
+      try { err.body = JSON.parse(text); } catch { /* not JSON */ }
+      throw err;
     }
     if (!text) return null;
     try {
@@ -134,15 +136,94 @@ export class Jira {
     };
   }
 
+  // --- Defects --------------------------------------------------------------
+
+  // Returns { typeId, fields: { fieldId: meta } } for the project's create screen.
+  async createMeta(projectKey, issueType) {
+    try {
+      const types = await this.request("GET", `/rest/api/2/issue/createmeta/${projectKey}/issuetypes`);
+      const list = types?.values || (Array.isArray(types) ? types : []);
+      const it = list.find((t) => (t.name || "").toLowerCase() === issueType.toLowerCase());
+      if (!it) throw new JiraError(`Issue type "${issueType}" not found in project ${projectKey} (available: ${list.map((t) => t.name).join(", ") || "none"}).`);
+      const fields = {};
+      for (let start = 0; ;) {
+        const page = await this.request("GET", `/rest/api/2/issue/createmeta/${projectKey}/issuetypes/${it.id}`, { params: { startAt: String(start), maxResults: "100" } });
+        const values = page?.values || [];
+        for (const f of values) fields[f.fieldId] = f;
+        start += values.length;
+        if (page?.isLast !== false || !values.length) break;
+      }
+      return { typeId: it.id, fields };
+    } catch (e) {
+      if (e.status !== 404) throw e;
+    }
+    // Jira older than 8.4
+    const res = await this.request("GET", "/rest/api/2/issue/createmeta", {
+      params: { projectKeys: projectKey, issuetypeNames: issueType, expand: "projects.issuetypes.fields" },
+    });
+    const it = res?.projects?.[0]?.issuetypes?.[0];
+    if (!it) throw new JiraError(`No create screen found for ${projectKey} / ${issueType}.`);
+    return { typeId: it.id, fields: it.fields || {} };
+  }
+
+  async findUser(query) {
+    if (!query) return null;
+    try {
+      const users = await this.request("GET", "/rest/api/2/user/search", { params: { username: query, maxResults: "5" } });
+      return users?.[0]?.name || null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Creates the issue. If Jira rejects specific fields, drops them and retries once.
+  // Returns { key, dropped: ["field (reason)"] }.
+  async createIssue(fields) {
+    try {
+      const created = await this.request("POST", "/rest/api/2/issue", { json: { fields } });
+      return { key: created.key, dropped: [] };
+    } catch (e) {
+      const bad = e.status === 400 ? e.body?.errors || {} : {};
+      const droppable = Object.keys(bad).filter((f) => f in fields && !["project", "issuetype", "summary"].includes(f));
+      if (!droppable.length || droppable.length !== Object.keys(bad).length) throw e;
+      const retry = { ...fields };
+      for (const f of droppable) delete retry[f];
+      const created = await this.request("POST", "/rest/api/2/issue", { json: { fields: retry } });
+      return { key: created.key, dropped: droppable.map((f) => `${f} (${bad[f]})`) };
+    }
+  }
+
+  async linkIssues(fromKey, toKey, linkName = "relates to") {
+    const types = (await this.request("GET", "/rest/api/2/issueLinkType"))?.issueLinkTypes || [];
+    const wanted = linkName.toLowerCase();
+    const lt = types.find((t) => [t.name, t.outward, t.inward].some((n) => (n || "").toLowerCase() === wanted))
+      || types.find((t) => (t.name || "").toLowerCase() === "relates");
+    if (!lt) throw new JiraError(`Link type "${linkName}" not found.`);
+    await this.request("POST", "/rest/api/2/issueLink", {
+      json: { type: { name: lt.name }, inwardIssue: { key: toKey }, outwardIssue: { key: fromKey } },
+    });
+  }
+
+  async search(jql, fields = "summary,status", maxResults = 10) {
+    const res = await this.request("GET", "/rest/api/2/search", { params: { jql, fields, maxResults: String(maxResults) } });
+    return res?.issues || [];
+  }
+
+  async testRunId(teKey, testKey) {
+    const run = await this.request("GET", "/rest/raven/1.0/api/testrun", { params: { testExecIssueKey: teKey, testIssueKey: testKey } });
+    if (!run?.id) throw new JiraError(`${testKey} has no test run in ${teKey}.`);
+    return run.id;
+  }
+
+  // Adds a defect to an Xray test run (shows under the run's Defects).
+  async addDefectToTestRun(runId, defectKey) {
+    await this.request("PUT", `/rest/raven/1.0/api/testrun/${runId}`, { json: { defects: { add: [defectKey] } } });
+  }
+
   // Xray keeps a test's result on its test run inside the execution, not on the
   // Test issue's workflow. status: PASS, FAIL, TODO, or a custom Xray status.
   async setTestRunStatus(teKey, testKey, status, runId) {
-    let id = runId;
-    if (!id) {
-      const run = await this.request("GET", "/rest/raven/1.0/api/testrun", { params: { testExecIssueKey: teKey, testIssueKey: testKey } });
-      id = run?.id;
-      if (!id) throw new JiraError(`${testKey} has no test run in ${teKey}.`);
-    }
+    const id = runId || (await this.testRunId(teKey, testKey));
     await this.request("PUT", `/rest/raven/1.0/api/testrun/${id}/status`, { params: { status } });
     return id;
   }
