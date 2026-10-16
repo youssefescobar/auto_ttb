@@ -2,6 +2,8 @@ import { getSettings, splitList } from "./lib/settings.js";
 import { Jira, parseIssueKey } from "./lib/jira.js";
 import * as store from "./lib/store.js";
 import { buildPotBlob } from "./lib/pot.js";
+import { draftDefect } from "./lib/ai.js";
+import { applyTitlePattern, buildDefectFields, optionsFor } from "./lib/defect.js";
 
 const $ = (id) => document.getElementById(id);
 const STATUSES = { pending: "Pending", executing: "Executing", pass: "Passed", fail: "Failed", blocked: "Blocked" };
@@ -18,6 +20,9 @@ const state = {
   pasteTarget: "actual", // screenshot category Ctrl+V pastes into
   urls: [], // object URLs to revoke on re-render
   busy: false,
+  defectOpen: null, // key of the test case whose defect editor is open
+  meta: null, // Defect create screen from Jira, loaded on first use
+  duplicates: {}, // tc key -> [{ key, summary, status }]
 };
 
 // --- Small DOM helper ------------------------------------------------------
@@ -103,6 +108,8 @@ async function openTe(teKey) {
   state.te = await store.getTe(teKey);
   state.shots = state.te ? await store.shotsForTe(teKey) : [];
   state.openTc = null;
+  state.defectOpen = null;
+  state.duplicates = {};
   await chrome.storage.local.set({ lastTe: teKey });
   render();
   refreshTeList();
@@ -178,6 +185,7 @@ async function deleteShot(id) {
 
 async function setStatus(tcKey, status) {
   const tc = tcByKey(tcKey);
+  if (status === "fail" && !tc.defect_key) state.defectOpen = tcKey;
   tc.status = status;
   tc.updated_at = new Date().toISOString();
   await saveTe();
@@ -205,6 +213,209 @@ async function setStatus(tcKey, status) {
     const partial = done.length ? ` (${done.join(", ")})` : "";
     toast(`${tcKey} marked ${label} here, but Jira was not fully updated${partial}: ${e.message}`, "error");
   }
+}
+
+
+// --- Defects ---------------------------------------------------------------
+
+const DRAFT_FIELDS = [
+  ["title", "Title", "input"],
+  ["scenario", "Scenario", 2],
+  ["steps", "Steps to recreate", 4],
+  ["expected", "Expected result", 2],
+  ["actual", "Actual result", 2],
+  ["test_data", "Test data", 1],
+  ["qa_analysis", "QA analysis", 1],
+];
+
+function draftOf(tc) {
+  tc.draft ??= { notes: tc.note || "", severity: state.settings.priority || "", assignee: state.settings.assignee || "", blocked_tcs: "1" };
+  return tc.draft;
+}
+
+async function loadMeta() {
+  if (state.meta) return state.meta;
+  if (!state.settings.jira_project) throw new Error("Set the Jira project key under Defects in Settings.");
+  state.meta = await jira().createMeta(state.settings.jira_project, state.settings.defect_issue_type || "Defect");
+  return state.meta;
+}
+
+async function imagesForAi(tcKey) {
+  if (!state.settings.share_screenshots_with_ai) return [];
+  const out = [];
+  for (const shot of state.shots.filter((s) => s.tc_key === tcKey)) {
+    // Downscale big screenshots: smaller requests, same information for the model
+    const bitmap = await createImageBitmap(shot.blob);
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const canvas = new OffscreenCanvas(Math.round(bitmap.width * scale), Math.round(bitmap.height * scale));
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    out.push({ category: shot.category, mime: "image/jpeg", base64: btoa(bin) });
+  }
+  return out;
+}
+
+async function draftWithAi(tc) {
+  const d = draftOf(tc);
+  const ai = await draftDefect({
+    apiKey: state.settings.gemini_api_key,
+    model: state.settings.gemini_model,
+    notes: d.notes,
+    environment: state.settings.defect_environment || state.te.environment,
+    testCase: `${tc.key} ${tc.summary || ""}`.trim(),
+    images: await imagesForAi(tc.key),
+  });
+  Object.assign(d, ai, { title: applyTitlePattern(state.settings, { aiTitle: ai.title, teKey: state.te.te_key, tcKey: tc.key }) });
+  await saveTe();
+  render();
+  toast("Draft ready. Review it, then create it or add it to the queue.");
+}
+
+async function findDuplicates(tc) {
+  const d = draftOf(tc);
+  const words = [...new Set(`${d.title || ""} ${d.notes || ""}`.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) || [])].slice(0, 6);
+  if (!words.length) throw new Error("Write a title or notes first.");
+  const project = state.settings.jira_project;
+  if (!project) throw new Error("Set the Jira project key under Defects in Settings.");
+  const type = (state.settings.defect_issue_type || "Defect").replace(/"/g, "");
+  const text = words.map((w) => `summary ~ "${w.replace(/"/g, "")}"`).join(" OR ");
+  const jql = `project = "${project}" AND issuetype = "${type}" AND statusCategory != Done AND (${text}) ORDER BY updated DESC`;
+  const issues = await jira().search(jql, "summary,status", 8);
+  state.duplicates[tc.key] = issues.map((i) => ({ key: i.key, summary: i.fields?.summary || "", status: i.fields?.status?.name || "" }));
+  render();
+  if (!issues.length) toast("No open defects look similar.");
+}
+
+// Links the defect to the Xray run and marks the test failed there.
+async function attachDefectToRun(tc, defectKey) {
+  const j = jira();
+  tc.run_id ||= await j.testRunId(state.te.te_key, tc.key);
+  if (tc.status !== "fail") {
+    await j.setTestRunStatus(state.te.te_key, tc.key, "FAIL", tc.run_id);
+    tc.status = "fail";
+  }
+  await j.addDefectToTestRun(tc.run_id, defectKey);
+}
+
+async function useExistingDefect(tc, key) {
+  tc.defect_key = key;
+  const warnings = [];
+  try {
+    await attachDefectToRun(tc, key);
+  } catch (e) {
+    warnings.push(`not added to the Xray run: ${e.message}`);
+  }
+  delete tc.draft;
+  delete state.duplicates[tc.key];
+  state.defectOpen = null;
+  await saveTe();
+  render();
+  toast(`${tc.key} linked to ${key}${warnings.length ? `, but ${warnings.join("; ")}` : "."}`, warnings.length ? "error" : "ok");
+}
+
+// Creates the defect in Jira from the reviewed draft. Returns the new key.
+async function createDefect(tc) {
+  const d = draftOf(tc);
+  if (!d.title?.trim()) throw new Error(`${tc.key}: the defect needs a title.`);
+  const j = jira();
+  const meta = await loadMeta();
+  const { fields, skipped } = buildDefectFields(state.settings, meta, d);
+  const assignee = d.assignee || state.settings.assignee;
+  if (assignee && meta.fields.assignee) {
+    const name = await j.findUser(assignee);
+    if (name) fields.assignee = { name };
+    else skipped.push(`assignee ("${assignee}" not found)`);
+  }
+  const { key, dropped } = await j.createIssue(fields);
+  const warnings = [...skipped, ...dropped.map((f) => `${f} rejected`)];
+
+  tc.defect_key = key;
+  delete tc.draft;
+  delete state.duplicates[tc.key];
+  await saveTe();
+
+  try {
+    await j.linkIssues(key, tc.key);
+  } catch (e) {
+    warnings.push(`not linked to ${tc.key}: ${e.message}`);
+  }
+  const shots = state.shots.filter((s) => s.tc_key === tc.key);
+  try {
+    await j.attach(key, shots.map((s) => ({ name: s.name, blob: s.blob })));
+  } catch (e) {
+    warnings.push(`screenshots not attached: ${e.message}`);
+  }
+  try {
+    await attachDefectToRun(tc, key);
+  } catch (e) {
+    warnings.push(`not added to the Xray run: ${e.message}`);
+  }
+  await saveTe();
+  if (state.defectOpen === tc.key) state.defectOpen = null;
+  render();
+  toast(`${key} created for ${tc.key}${warnings.length ? `. Check in Jira: ${warnings.join("; ")}` : "."}`, warnings.length ? "error" : "ok");
+  return key;
+}
+
+async function submitQueue() {
+  const queued = state.te.test_cases.filter((tc) => tc.draft?.queued);
+  const created = [];
+  for (const tc of queued) {
+    toast(`Creating defect ${created.length + 1} of ${queued.length} (${tc.key})…`);
+    try {
+      created.push(await createDefect(tc));
+    } catch (e) {
+      toast(`Stopped at ${tc.key}: ${e.message}${created.length ? ` (created ${created.join(", ")})` : ""}`, "error");
+      return;
+    }
+  }
+  toast(`Created ${created.join(", ")}.`);
+}
+
+function defectEditor(tc) {
+  const d = draftOf(tc);
+  const save = async () => { d.updated_at = new Date().toISOString(); await saveTe(); };
+  const bind = (key, el) => {
+    el.addEventListener("change", async () => { d[key] = el.value; await save(); });
+    return el;
+  };
+  const severityOptions = optionsFor(state.meta?.fields, state.settings.field_severity);
+  const severity = severityOptions.length
+    ? bind("severity", h("select", {}, h("option", { value: "" }, "—"), severityOptions.map((o) => h("option", { value: o, selected: o === d.severity }, o))))
+    : bind("severity", h("input", { value: d.severity || "" }));
+  const dups = state.duplicates[tc.key];
+
+  return h("section", { class: "defect" },
+    h("div", { class: "row between" }, h("strong", {}, "Defect"), h("button", { class: "link", onclick: () => { state.defectOpen = null; render(); } }, "Close")),
+    h("label", {}, "What went wrong?", bind("notes", h("textarea", { rows: 2, value: d.notes || "", placeholder: "Short notes; the AI writes the rest from these and the screenshots" }))),
+    h("div", { class: "row" },
+      h("button", { class: "primary", onclick: () => busy("ai", () => draftWithAi(tc)) }, "Draft with AI"),
+      h("small", { class: "muted" }, state.settings.share_screenshots_with_ai ? "Sends notes and this test case's screenshots to Gemini" : "Sends notes only"),
+    ),
+    DRAFT_FIELDS.map(([key, label, rows]) => h("label", {}, label,
+      bind(key, rows === "input" ? h("input", { value: d[key] || "" }) : h("textarea", { rows, value: d[key] || "" })))),
+    h("div", { class: "row grid3" },
+      h("label", {}, "Severity", severity),
+      h("label", {}, "Assignee", bind("assignee", h("input", { value: d.assignee || "" }))),
+      h("label", {}, "TCs blocked", bind("blocked_tcs", h("input", { type: "number", min: 0, value: d.blocked_tcs ?? "1" }))),
+    ),
+    dups ? h("div", { class: "dups" },
+      h("strong", {}, dups.length ? "Possible duplicates" : "No similar open defects"),
+      dups.map((x) => h("div", { class: "row between" },
+        h("span", {}, h("a", { href: jira().issueUrl(x.key), target: "_blank" }, x.key), ` ${x.summary} `, h("small", { class: "muted" }, x.status)),
+        h("button", { class: "link", onclick: () => busy("link", () => useExistingDefect(tc, x.key)) }, "Use this"),
+      )),
+    ) : null,
+    h("div", { class: "row actions" },
+      h("button", { class: "fail", onclick: () => busy("create", () => createDefect(tc)) }, "Create in Jira"),
+      h("button", { onclick: async () => { d.queued = !d.queued; await save(); render(); toast(d.queued ? `${tc.key} added to the queue.` : `${tc.key} removed from the queue.`); } }, d.queued ? "Remove from queue" : "Add to queue"),
+      h("button", { onclick: () => busy("dups", () => findDuplicates(tc)) }, "Check duplicates"),
+      h("button", { class: "link danger", onclick: async () => { if (!confirm("Discard this defect draft?")) return; delete tc.draft; state.defectOpen = null; await saveTe(); render(); } }, "Discard"),
+    ),
+  );
 }
 
 // --- PoT export ------------------------------------------------------------
@@ -273,6 +484,8 @@ function tcItem(tc) {
     h("span", { class: `dot ${tc.status}`, title: STATUSES[tc.status] }),
     h("span", { class: "key" }, tc.key),
     h("span", { class: "summary" }, tc.summary || ""),
+    tc.defect_key ? h("span", { class: "fail-text", title: "Linked defect" }, tc.defect_key) : null,
+    tc.draft?.queued ? h("span", { class: "muted", title: "Defect draft queued" }, "📝") : null,
     counts ? h("span", { class: "muted" }, `📷${counts}`) : null,
   );
   const details = h("details", { class: "tc", open }, header);
@@ -285,7 +498,12 @@ function tcItem(tc) {
     h("label", {}, "Note",
       h("textarea", { rows: 2, value: tc.note || "", onchange: async (e) => { tc.note = e.target.value.trim(); await saveTe(); } })),
     h("label", {}, "Linked defect",
-      h("input", { value: tc.defect_key || "", placeholder: "e.g. ABC-123", onchange: async (e) => { tc.defect_key = parseIssueKey(e.target.value) || e.target.value.trim(); await saveTe(); } })),
+      h("div", { class: "row" },
+        h("input", { value: tc.defect_key || "", placeholder: "e.g. ABC-123", class: "grow", onchange: async (e) => { tc.defect_key = parseIssueKey(e.target.value) || e.target.value.trim(); await saveTe(); render(); } }),
+        tc.defect_key && ISSUE_KEY.test(tc.defect_key) ? h("a", { href: jira().issueUrl(tc.defect_key), target: "_blank" }, "Open ↗") : null,
+        !tc.defect_key && state.defectOpen !== tc.key
+          ? h("button", { onclick: () => { state.defectOpen = tc.key; render(); } }, tc.draft ? "Edit draft" : "Report defect")
+          : null)),
     h("div", { class: "row actions" },
       h("button", { class: "pass", onclick: () => busy("pass", () => setStatus(tc.key, "pass")) }, "Pass"),
       h("button", { class: "fail", onclick: () => busy("fail", () => setStatus(tc.key, "fail")) }, "Fail"),
@@ -303,6 +521,7 @@ function tcItem(tc) {
         },
       }, "Remove"),
     ),
+    state.defectOpen === tc.key ? defectEditor(tc) : null,
   );
   return details;
 }
@@ -323,6 +542,12 @@ function render() {
     return;
   }
   const count = (s) => te.test_cases.filter((tc) => tc.status === s).length;
+  const queued = te.test_cases.filter((tc) => tc.draft?.queued);
+  // The defect editor shows the create screen's severity options once they're loaded
+  if (state.defectOpen && !state.meta && !state.metaLoading && state.settings.jira_project) {
+    state.metaLoading = true;
+    loadMeta().then(render, () => {}).finally(() => (state.metaLoading = false));
+  }
   const addInput = h("input", { placeholder: "Add a test case key", autocomplete: "off" });
 
   main.replaceChildren(
@@ -349,6 +574,10 @@ function render() {
           },
         }, "Remove"),
       ),
+      queued.length ? h("div", { class: "queue row between" },
+        h("span", {}, `${queued.length} defect draft${queued.length > 1 ? "s" : ""} queued: ${queued.map((tc) => tc.key).join(", ")}`),
+        h("button", { class: "fail", onclick: () => busy("queue", submitQueue) }, "Create all in Jira"),
+      ) : null,
     ),
     h("div", { class: "tcs" }, te.test_cases.map(tcItem)),
     h("form", {
@@ -402,6 +631,7 @@ chrome.runtime.onMessage.addListener((msg) => {
 chrome.storage.onChanged.addListener(async (changes, area) => {
   if (area !== "local" || !changes.settings) return;
   state.settings = await getSettings();
+  state.meta = null;
   checkJira();
   render();
 });

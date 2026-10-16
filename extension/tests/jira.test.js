@@ -98,3 +98,24 @@ test("sets the Xray test run status, looking the run up when its id is unknown",
   assert.equal(calls.length, 3); // no lookup with a known id
   await assert.rejects(jira.setTestRunStatus("QA-1", "QA-7", "PASS"), /no test run/);
 });
+
+test("createIssue drops fields Jira rejects and retries once", async () => {
+  let n = 0;
+  const { jira, calls } = fakeJira({
+    "POST /rest/api/2/issue": (u, init) => {
+      n++;
+      const fields = JSON.parse(init.body).fields;
+      if ("customfield_9" in fields) return [400, { errors: { customfield_9: "Option not valid" } }];
+      return [201, { key: "BDR-77" }];
+    },
+  });
+  const out = await jira.createIssue({ project: { key: "BDR" }, summary: "x", customfield_9: { id: "1" } });
+  assert.deepEqual(out, { key: "BDR-77", dropped: ["customfield_9 (Option not valid)"] });
+  assert.equal(n, 2);
+});
+
+test("adds a defect to an Xray test run", async () => {
+  const { jira, calls } = fakeJira({ "PUT /rest/raven/1.0/api/testrun/501": () => [200, ""] });
+  await jira.addDefectToTestRun(501, "BDR-77");
+  assert.deepEqual(JSON.parse(calls[0].init.body), { defects: { add: ["BDR-77"] } });
+});

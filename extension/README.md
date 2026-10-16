@@ -2,7 +2,7 @@
 
 A Chrome/Edge side panel that replaces the local Python server. It runs inside your normal browser and uses the Jira tab you are already logged into, so there is no Python, no local server, no saved cookie file and no extra Chromium.
 
-## What it does (step 1)
+## What it does
 
 - Load a Test Execution by key or pasted Jira link. Its test cases come from Xray, or from the issue's links and sub-tasks.
 - Per test case, collect **Expected** and **Actual** screenshots by:
@@ -15,7 +15,15 @@ A Chrome/Edge side panel that replaces the local Python server. It runs inside y
 - **Download PoT** builds the Proof of Testing Word file in the browser, with the same layout as before.
 - Everything is stored in this browser profile (IndexedDB). Settings → Export backup saves it to a file.
 
-Still to come: AI defect drafting and the draft queue (step 2), and the click recorder (step 3).
+### Defects (step 2)
+
+- **Fail** opens a defect editor on the test case (or click **Report defect**). Write a short note and click **Draft with AI**: Gemini writes the title, scenario, steps, expected and actual from your note and the test case's screenshots (screenshots only if "Send screenshots to Gemini" is on). Edit anything before filing.
+- **Create in Jira** creates the defect with your project's fields (Settings → Defects), links it to the test case, attaches the screenshots, marks the Xray run FAIL and adds the defect to it.
+- **Add to queue** keeps the draft; **Create all in Jira** at the top files every queued draft in one go.
+- **Check duplicates** lists open defects in the project with similar words; **Use this** links an existing one instead of filing a new one.
+- Settings → **Detect field IDs from Jira** fills the custom field IDs from your Defect create screen.
+
+Still to come: the click recorder (step 3).
 
 ## Install (developer mode)
 

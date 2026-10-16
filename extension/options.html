@@ -8,33 +8,21 @@
 <body class="page">
   <h1>Auto TTB settings</h1>
   <form id="form">
-    <section>
-      <h2>Jira</h2>
-      <label>Jira base URL
-        <input name="jira_base_url" placeholder="https://jira.example.com" required>
-        <small>Saving asks Chrome for access to this site only. The extension uses your normal Jira login; no token or password is stored.</small>
-      </label>
-      <label class="check"><input type="checkbox" name="comment_evidence">
-        Also add a Jira comment with the Actual screenshots when passing or failing
-      </label>
-    </section>
-    <section>
-      <h2>Test execution</h2>
-      <label>Environments (comma separated) <input name="environments"></label>
-      <label>Languages (comma separated) <input name="languages"></label>
-    </section>
-    <div class="row">
+    <div id="fields"></div>
+    <div class="row sticky-save">
       <button type="submit" class="primary">Save</button>
+      <button type="button" id="detect">Detect field IDs from Jira</button>
       <span id="status" class="muted"></span>
     </div>
   </form>
 
   <section>
     <h2>Backup</h2>
-    <p class="muted">Test executions and screenshots are stored in this browser profile only. Export a backup before clearing browser data or moving to another laptop.</p>
+    <p class="muted">Test executions and screenshots are stored in this browser profile only. Export a backup before clearing browser data or moving to another laptop. "Import old app settings" reads the Python app's settings_overrides.json into this form; review it, then Save.</p>
     <div class="row">
       <button id="export">Export backup</button>
       <label class="button">Import backup<input id="import" type="file" accept="application/json" hidden></label>
+      <label class="button">Import old app settings<input id="import-old" type="file" accept="application/json" hidden></label>
     </div>
   </section>
   <script type="module" src="options.js"></script>
