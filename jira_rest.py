@@ -1,11 +1,14 @@
 """
 Jira Server / Data Center REST API client.
 
-Uses a Personal Access Token (Profile -> Personal Access Tokens in Jira DC 8.14+)
-sent as a Bearer token. No browser, no saved cookies. Enabled automatically when
-a token is configured (see secret_store.py); jira_actions.py falls back to the
-Playwright browser flow otherwise.
+Authenticates with either:
+  - a Personal Access Token (Profile -> Personal Access Tokens, Jira DC 8.14+), or
+  - the login session saved by the one-time browser login (jira_session.json):
+    Jira's REST API accepts the same session cookies as the web UI, so no token
+    or password is needed.
+jira_actions.py falls back to driving the Jira UI with Playwright when neither exists.
 """
+import json
 import os
 import re
 import time
@@ -42,11 +45,19 @@ class JiraRestError(Exception):
     pass
 
 
-def is_enabled() -> bool:
-    """REST mode is used when a token exists and the user hasn't forced browser mode."""
+def auth_mode() -> str | None:
+    """'token', 'session', or None when REST can't be used."""
     if str(config.get("jira_mode")).lower() == "browser":
-        return False
-    return bool(secret_store.get_secret("jira_pat"))
+        return None
+    if secret_store.get_secret("jira_pat"):
+        return "token"
+    if os.path.exists(config.BROWSER_STATE_PATH):
+        return "session"
+    return None
+
+
+def is_enabled() -> bool:
+    return auth_mode() is not None
 
 
 def base_url() -> str:
@@ -56,15 +67,34 @@ def base_url() -> str:
     return url
 
 
+def _load_session_cookies(s: requests.Session):
+    """Copies the Jira cookies saved by the browser login into a requests session."""
+    try:
+        with open(config.BROWSER_STATE_PATH, "r", encoding="utf-8") as f:
+            state = json.load(f)
+    except (OSError, ValueError) as e:
+        raise JiraRestError(f"Could not read the saved Jira login: {e}")
+    host = re.sub(r"^https?://", "", base_url()).split("/")[0].split(":")[0].lower()
+    for c in state.get("cookies", []):
+        domain = c.get("domain", "").lstrip(".").lower()
+        if domain and (host == domain or host.endswith("." + domain)):
+            s.cookies.set(c["name"], c["value"], domain=c.get("domain"), path=c.get("path", "/"))
+
+
 def _session() -> requests.Session:
-    token = secret_store.get_secret("jira_pat")
-    if not token:
-        raise JiraRestError("No Jira Personal Access Token set on the Config page.")
+    mode = auth_mode()
+    if mode is None:
+        raise JiraRestError("No Jira token or saved Jira login. Log in to Jira or set a token on the Config page.")
     s = requests.Session()
     s.headers.update({
-        "Authorization": f"Bearer {token}",
         "Accept": "application/json",
+        # Required by Jira's XSRF check for cookie-authenticated writes
+        "X-Atlassian-Token": "no-check",
     })
+    if mode == "token":
+        s.headers["Authorization"] = f"Bearer {secret_store.get_secret('jira_pat')}"
+    else:
+        _load_session_cookies(s)
     # Corporate CA bundle, if the Jira host uses an internal certificate authority
     ca_bundle = config.get("jira_ca_bundle")
     if ca_bundle:
@@ -76,6 +106,13 @@ def _request(method: str, path: str, **kwargs):
     url = f"{base_url()}{path}"
     kwargs.setdefault("timeout", 30)
     resp = _session().request(method, url, **kwargs)
+    if resp.status_code == 401:
+        hint = ("Jira login expired: click 'Login to Jira' and save the session again."
+                if auth_mode() == "session" else "Jira token rejected: check or replace it on the Config page.")
+        err = JiraRestError(f"{method} {path} -> HTTP 401. {hint}")
+        err.status_code = 401
+        err.response = resp
+        raise err
     if resp.status_code >= 400:
         detail = resp.text[:500]
         try:
@@ -102,7 +139,7 @@ def check_connection(max_age_seconds: int = 60) -> dict:
     if _connection_cache["result"] and time.time() - _connection_cache["at"] < max_age_seconds:
         return _connection_cache["result"]
     me = _request("GET", "/rest/api/2/myself")
-    result = {"name": me.get("name"), "display_name": me.get("displayName")}
+    result = {"name": me.get("name"), "display_name": me.get("displayName"), "auth": auth_mode()}
     _connection_cache.update(at=time.time(), result=result)
     return result
 
@@ -251,6 +288,59 @@ def _create_meta(project_key: str, issue_type: str) -> tuple[str, dict]:
     except (KeyError, IndexError):
         raise JiraRestError(f"No create metadata for {project_key}/{issue_type}")
     return it["id"], it.get("fields", {})
+
+
+# Names a field is commonly given on the Defect create screen, per Config key.
+FIELD_NAMES = {
+    FIELD_FOR_PROJECT: ["For Project"],
+    FIELD_DEMO: ["Demo"],
+    FIELD_SEVERITY: ["Defect Severity", "Severity"],
+    FIELD_TCS_BLOCKED: ["Test Cases Blocked", "TCs Blocked", "No. of Test Cases Blocked"],
+    FIELD_IMPACTED_SYSTEM: ["Impacted System", "Impacted Systems"],
+    FIELD_SCENARIO: ["Scenario"],
+    FIELD_EXPECTED: ["Expected Result", "Expected Results", "Expected"],
+    FIELD_ACTUAL: ["Actual Result", "Actual Results", "Actual"],
+    FIELD_STEPS: ["Steps to Recreate", "Steps to Reproduce", "Steps"],
+    FIELD_QA_ANALYSIS: ["QA Analysis"],
+    FIELD_TEST_DATA: ["Test Data"],
+    FIELD_DEFECT_TYPE: ["Defect Type"],
+    FIELD_ENVIRONMENT: ["Defect Environment", "Environment"],
+    FIELD_PHASE: ["Defect Phase", "Phase"],
+    FIELD_USABILITY: ["Usability Issue", "Usability"],
+    FIELD_REOCCURRENCE: ["Re-occurrence", "Reoccurrence", "Re-Occurrence"],
+    FIELD_NEWSTACK: ["NewStack Impact", "New Stack Impact"],
+    FIELD_CATEGORY: ["Defect Category"],
+    FIELD_MILESTONE: ["Milestone Type", "Milestone"],
+    FIELD_UAT_PRIORITY: ["UAT Priority"],
+}
+
+
+def _norm(name: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(name).lower())
+
+
+def detect_custom_fields(project_key: str = None, issue_type: str = None) -> dict:
+    """
+    Reads the Defect create screen and matches custom fields to Config keys by name.
+    Returns {"found": {config_key: field_id}, "unmatched": [config_key], "fields": [{id, name}]}.
+    """
+    project_key = project_key or _project_key()
+    issue_type = issue_type or config.get("defect_issue_type")
+    _, meta = _create_meta(project_key, issue_type)
+    custom = {fid: m.get("name", "") for fid, m in meta.items() if fid.startswith("customfield_")}
+    by_name = {}
+    for fid, name in custom.items():
+        by_name.setdefault(_norm(name), fid)
+
+    found, unmatched = {}, []
+    for key, names in FIELD_NAMES.items():
+        fid = next((by_name[_norm(n)] for n in names if _norm(n) in by_name), None)
+        if fid:
+            found[key] = fid
+        else:
+            unmatched.append(key)
+    fields = sorted(({"id": fid, "name": name} for fid, name in custom.items()), key=lambda f: f["name"].lower())
+    return {"found": found, "unmatched": unmatched, "fields": fields}
 
 
 def _match_option(allowed: list, value: str):

@@ -19,7 +19,7 @@ function showToast(message, type = 'info') {
   toast.textContent = message;
   toast.addEventListener('click', () => toast.remove());
   $('#toast-container').appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
+  setTimeout(() => toast.remove(), Math.max(3000, message.length * 60));
 }
 
 function el(tag, attrs = {}, ...children) {
@@ -87,8 +87,40 @@ async function render() {
   form.replaceChildren();
   for (const section of schema.sections) {
     const card = el('section', { class: 'card config-section' }, el('h2', {}, section.title));
+    if (section.fields.some(f => f.key.startsWith('field_'))) {
+      const btn = el('button', { type: 'button', class: 'btn btn-sm btn-outline' }, '🔍 Detect from Jira');
+      btn.addEventListener('click', () => detectFields(btn));
+      card.append(el('p', { class: 'help-text text-muted' },
+        'Reads your Defect create screen in Jira and fills the empty boxes below by field name. ',
+        'Needs the Jira base URL saved, and a token or a saved Jira login.'), btn);
+    }
     for (const field of section.fields) card.append(buildField(field, settings, history, schema.missing));
     form.append(card);
+  }
+}
+
+async function detectFields(btn) {
+  const form = $('#config-form');
+  btn.disabled = true;
+  try {
+    const res = await api('POST', '/api/detect-fields', {
+      jira_project: form.elements['jira_project']?.value.trim(),
+      defect_issue_type: form.elements['defect_issue_type']?.value.trim(),
+    });
+    let filled = 0, differ = 0;
+    for (const [key, id] of Object.entries(res.found)) {
+      const input = form.elements[key];
+      if (!input) continue;
+      if (!input.value.trim()) { input.value = id; filled++; }
+      else if (input.value.trim() !== id) differ++;
+    }
+    const missing = res.unmatched.length ? ` Not found: ${res.unmatched.map(k => k.replace('field_', '')).join(', ')}.` : '';
+    const kept = differ ? ` Kept ${differ} value(s) you had already set.` : '';
+    showToast(`Filled ${filled} field ID(s). Review, then Save.${kept}${missing}`, filled ? 'success' : 'info');
+  } catch (e) {
+    showToast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
   }
 }
 
