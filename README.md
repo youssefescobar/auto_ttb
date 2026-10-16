@@ -1,5 +1,7 @@
 # QA / JIRA Automation — Setup & User Guide
 
+> **New:** a browser extension that replaces this local server is in [`extension/`](extension/README.md). It covers test executions, pass/fail, screenshots and the PoT document so far; AI defect drafting and the click recorder are next.
+
 Local web app for QA manual testing. Collects test evidence screenshots, generates defect documentation with **Google Gemini AI**, logs/transitions test cases in Jira, and maintains individual Proof of Completion (PoC) Word documents per Test Execution (TE).
 
 ---

@@ -1,0 +1,75 @@
+:root {
+  --bg: #ffffff; --fg: #0f172a; --muted: #64748b; --line: #e2e8f0; --soft: #f8fafc;
+  --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706; --blocked: #a855f7;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0f172a; --fg: #e2e8f0; --muted: #94a3b8; --line: #334155; --soft: #1e293b; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 13px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+body.panel { padding: 0 10px 40px; }
+body.page { max-width: 640px; margin: 0 auto; padding: 16px; }
+body.busy { cursor: progress; }
+body.busy button { pointer-events: none; opacity: .6; }
+a { color: var(--accent); }
+h1 { font-size: 18px; } h2 { font-size: 15px; margin: 4px 0; }
+small, .muted { color: var(--muted); }
+.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.between { justify-content: space-between; }
+input, select, textarea, button, .button {
+  font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 8px;
+}
+input, textarea { width: 100%; }
+#load-form input { flex: 1; width: auto; }
+button, .button { cursor: pointer; background: var(--soft); }
+button:hover, .button:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.pass { background: var(--pass); border-color: var(--pass); color: #fff; }
+button.fail { background: var(--fail); border-color: var(--fail); color: #fff; }
+button.link { background: none; border: none; color: var(--accent); padding: 5px 4px; }
+button.danger { color: var(--fail); }
+button.icon { background: none; border: none; font-size: 16px; padding: 2px 6px; }
+label { display: block; margin: 8px 0; }
+label.check { display: flex; gap: 6px; align-items: center; }
+label.check input { width: auto; }
+label > input, label > textarea { margin-top: 3px; }
+section { margin: 14px 0; }
+.ok { color: var(--pass); } .error { color: var(--fail); } .warn { color: var(--warn); }
+
+header { display: flex; align-items: center; gap: 8px; padding: 10px 0; position: sticky; top: 0; background: var(--bg); z-index: 1; }
+header strong { flex: 1; font-size: 15px; }
+.pill { border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; font-size: 12px; cursor: default; }
+.pill.ok { color: var(--pass); border-color: var(--pass); }
+.pill.warn { color: var(--warn); border-color: var(--warn); cursor: pointer; }
+#te-select { width: 100%; margin-top: 6px; }
+.empty { text-align: center; margin-top: 40px; }
+
+.te-head { border-bottom: 1px solid var(--line); padding: 10px 0; }
+.te-head p { margin: 4px 0; }
+.te-head .row { margin-top: 6px; }
+.counts { font-size: 12px; }
+.pass-text { color: var(--pass); } .fail-text { color: var(--fail); }
+
+.tc { border-bottom: 1px solid var(--line); padding: 6px 0; }
+.tc > summary { display: flex; gap: 8px; align-items: center; cursor: pointer; list-style: none; padding: 4px 0; }
+.tc > summary::-webkit-details-marker { display: none; }
+.tc[open] { background: var(--soft); margin: 0 -10px; padding: 6px 10px 10px; }
+.tc .key { font-weight: 600; white-space: nowrap; }
+.tc .summary { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--warn); }
+.dot.pass { background: var(--pass); } .dot.fail { background: var(--fail); } .dot.blocked { background: var(--blocked); }
+
+.shots { border: 1px dashed var(--line); border-radius: 8px; padding: 6px 8px; margin: 8px 0; }
+.shots.paste-target { border-color: var(--accent); }
+.thumbs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.thumb { position: relative; margin: 0; }
+.thumb img { height: 64px; border-radius: 4px; border: 1px solid var(--line); cursor: zoom-in; display: block; }
+.thumb .remove { position: absolute; top: -6px; right: -6px; background: var(--fail); color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 12px; line-height: 1; padding: 0; }
+.actions { margin-top: 8px; }
+.add-tc { margin-top: 10px; }
+.add-tc input { flex: 1; width: auto; }
+
+#toast { position: fixed; left: 10px; right: 10px; bottom: 10px; padding: 8px 10px; border-radius: 8px; background: var(--fg); color: var(--bg); box-shadow: 0 4px 12px rgb(0 0 0 / .2); }
+#toast.error { background: var(--fail); color: #fff; }
