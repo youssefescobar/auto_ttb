@@ -28,9 +28,9 @@ SECTIONS = [
         ("jira_username", "Jira username", "", "text", ""),
         ("jira_pat", "Jira Personal Access Token", "", "secret",
          "Jira → Profile → Personal Access Tokens. Kept in the OS credential store, never in a file. "
-         "With a token, Jira actions use the REST API instead of a browser."),
+         "Optional: without one, the app uses your saved Jira login (Login button) for the REST API."),
         ("jira_mode", "Connection mode", "auto", "select:auto|browser",
-         "auto = REST API when a token is set; browser = always drive the Jira page"),
+         "auto = REST API using your token, or your saved Jira login if no token; browser = always drive the Jira page"),
         ("jira_ca_bundle", "Corporate CA bundle path", "", "text",
          "Only if Jira uses an internal certificate authority"),
         ("network_speed", "Browser speed / timeout", "Normal", "select:Fast|Normal|Slow|Very Slow", ""),

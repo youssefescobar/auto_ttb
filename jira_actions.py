@@ -1,8 +1,9 @@
 """
 Jira Server/DC actions.
-With a Personal Access Token configured, transitions / TE lookups (and defect
-creation when auto-submit is on) go through the REST API (jira_rest.py).
-Otherwise Playwright drives the Jira UI using a session saved to jira_session.json.
+Transitions / TE lookups (and defect creation when auto-submit is on) go through
+the REST API (jira_rest.py), signed in with a Personal Access Token or with the
+login saved to jira_session.json by the one-time browser login. Playwright drives
+the Jira UI for the review-before-submit flow, or when REST can't be used.
 """
 import os
 import sys
@@ -126,6 +127,7 @@ def get_login_status():
             me = jira_rest.check_connection()
             status["rest"] = True
             status["rest_user"] = me.get("display_name") or me.get("name")
+            status["rest_auth"] = me.get("auth")
         except Exception as e:
             status["rest_error"] = str(e)
     return status
@@ -169,9 +171,16 @@ def _get_context(p):
 
 
 def transition_tc(tc_key: str, transition_name: str):
-    """Transitions a TC: over REST when a Jira token is set, else by clicking in the UI."""
+    """Transitions a TC over REST when possible, else by clicking in the UI."""
     if jira_rest.is_enabled():
-        return jira_rest.transition_issue(tc_key, transition_name)
+        try:
+            return jira_rest.transition_issue(tc_key, transition_name)
+        except jira_rest.JiraRestError as e:
+            # With the saved login, fall back to the page if the REST API itself is
+            # refused (e.g. blocked by a proxy). An expired login fails either way.
+            if jira_rest.auth_mode() != "session" or getattr(e, "status_code", 401) == 401:
+                raise
+            print(f"  [!] REST transition failed ({e}); using the Jira page instead.")
 
     with sync_playwright() as p:
         browser, context = _get_context(p)

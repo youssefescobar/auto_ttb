@@ -198,8 +198,16 @@ async function checkSession() {
     }
 
     if (res.rest) {
-      if (dot) { dot.className = 'session-indicator active'; dot.title = `Connected to Jira with token as ${res.rest_user || 'you'}`; }
-      if (loginBtn) { show(loginBtn); loginBtn.textContent = '✓ Jira (token)'; }
+      const via = res.rest_auth === 'token' ? 'token' : 'login';
+      if (dot) { dot.className = 'session-indicator active'; dot.title = `Connected to Jira (${via}) as ${res.rest_user || 'you'}`; }
+      if (loginBtn) { show(loginBtn); loginBtn.textContent = `✓ Jira (${via})`; }
+      if (saveBtn) hide(saveBtn);
+      return;
+    }
+
+    if (res.rest_error && /HTTP 401/.test(res.rest_error)) {
+      if (dot) { dot.className = 'session-indicator warning'; dot.title = res.rest_error; }
+      if (loginBtn) { show(loginBtn); loginBtn.textContent = '⚠️ Jira login expired'; }
       if (saveBtn) hide(saveBtn);
       return;
     }

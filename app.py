@@ -8,6 +8,7 @@ from datetime import datetime
 
 import config
 import jira_actions
+import jira_rest
 import defect_draft
 import poc_doc
 import db
@@ -46,6 +47,17 @@ def config_page():
 def api_config_schema():
     return jsonify({"sections": config.schema(), "missing": config.missing_required(),
                     "keyring": secret_store.has_keyring()})
+
+@app.route('/api/detect-fields', methods=['POST'])
+def api_detect_fields():
+    """Matches the Defect create screen's custom fields to the Config page's field ID settings."""
+    data = request.json or {}
+    try:
+        result = jira_rest.detect_custom_fields(data.get('jira_project') or None,
+                                                data.get('defect_issue_type') or None)
+    except jira_rest.JiraRestError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(result)
 
 @app.route('/api/login', methods=['POST'])
 def api_login():

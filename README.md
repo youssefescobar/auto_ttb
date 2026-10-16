@@ -70,16 +70,21 @@ The app sends you to the Config page until the Jira base URL is set. Everything 
 
 ---
 
-## Jira Connection: Token (recommended) vs Browser
+## Jira Connection
 
-**Token / REST API (recommended).** Create a Personal Access Token in Jira (*Profile → Personal Access Tokens*) and enter it on the Config page. It is stored in the OS credential store (Windows Credential Manager / macOS Keychain) via `keyring`, never in a project file. With a token:
+Jira actions use the Jira REST API, signed in one of two ways:
 
-- TC transitions and Test Execution lookups use the Jira REST API, no browser window.
-- Defects and comments are created over REST when **Auto-submit defect** is on. When it is off, the browser still opens the pre-filled Jira form so you can review it before clicking Create.
+- **Your Jira login (no token needed).** Click **Login to Jira** in the top bar, log in as usual in the window that opens, then **Save Jira Session**. The app sends that saved login (`jira_session.json`) to the REST API. When it expires, the top bar shows *Jira login expired*: log in again. Treat `jira_session.json` like a password.
+- **Personal Access Token (optional).** If your Jira offers *Profile → Personal Access Tokens*, enter one on the Config page. It is stored in the OS credential store (Windows Credential Manager / macOS Keychain), never in a project file, and is used instead of the saved login.
+
+Either way:
+
+- TC transitions and Test Execution lookups go through REST, with no browser window.
+- Defects and comments are created over REST when **Auto-submit defect** is on. When it is off, the browser opens the pre-filled Jira form so you can review it before clicking Create.
 - Set the **Jira project key** on the Config page. If Jira uses an internal certificate authority, set **Corporate CA bundle path**.
-- Fill in the **Jira custom field IDs** for your Jira's Defect screen; fields left empty are skipped.
+- For the **Jira custom field IDs**, click **🔍 Detect from Jira** on the Config page: it reads your Defect create screen, fills the empty boxes by field name, and lists any it couldn't match. Fields left empty are skipped.
 
-**Browser (fallback).** Without a token, or with Connection mode set to *browser*, Playwright drives the Jira UI using the session saved in `jira_session.json`. Treat that file like a password: it contains your Jira login cookies.
+Set Connection mode to *browser* to always drive the Jira page with Playwright instead.
 
 The web app's Flask debugger is off by default; set `FLASK_DEBUG=1` only while developing.
 

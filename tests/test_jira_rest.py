@@ -43,20 +43,21 @@ class FakeJira:
         self.reject_fields = {}
         self.meta = [
             {"fieldId": "summary", "schema": {"type": "string"}},
+            {"fieldId": "customfield_sprint", "name": "Sprint", "schema": {"type": "array"}},
             {"fieldId": "description", "schema": {"type": "string"}},
             {"fieldId": "components", "schema": {"type": "array", "items": "component"},
              "allowedValues": [{"id": "10", "name": "Android"}, {"id": "11", "name": "iOS"}]},
             {"fieldId": "labels", "schema": {"type": "array", "items": "string"}},
             {"fieldId": "assignee", "schema": {"type": "user"}},
-            {"fieldId": cf(jira_rest.FIELD_SEVERITY), "schema": SELECT, "allowedValues": [opt(1, "1-Low"), opt(2, "2-Medium")]},
-            {"fieldId": cf(jira_rest.FIELD_SCENARIO), "schema": {"type": "string"}},
-            {"fieldId": cf(jira_rest.FIELD_TCS_BLOCKED), "schema": {"type": "number"}},
-            {"fieldId": cf(jira_rest.FIELD_ENVIRONMENT), "schema": SELECT, "allowedValues": [opt(5, "Integration")]},
-            {"fieldId": cf(jira_rest.FIELD_DEFECT_TYPE),
+            {"fieldId": cf(jira_rest.FIELD_SEVERITY), "name": "Defect Severity", "schema": SELECT, "allowedValues": [opt(1, "1-Low"), opt(2, "2-Medium")]},
+            {"fieldId": cf(jira_rest.FIELD_SCENARIO), "name": "Scenario", "schema": {"type": "string"}},
+            {"fieldId": cf(jira_rest.FIELD_TCS_BLOCKED), "name": "Test Cases Blocked", "schema": {"type": "number"}},
+            {"fieldId": cf(jira_rest.FIELD_ENVIRONMENT), "name": "Defect Environment", "schema": SELECT, "allowedValues": [opt(5, "Integration")]},
+            {"fieldId": cf(jira_rest.FIELD_DEFECT_TYPE), "name": "Defect type",
              "schema": {"type": "option-with-child", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:cascadingselect"},
              "allowedValues": [{"id": "41119", "value": "B2B Digital Revamp",
                                 "children": [{"id": "41813", "value": "BDR-ANDROID"}]}]},
-            {"fieldId": cf(jira_rest.FIELD_DEMO), "schema": SELECT, "allowedValues": [opt(7, "Demo 1")]},
+            {"fieldId": cf(jira_rest.FIELD_DEMO), "name": "Demo", "schema": SELECT, "allowedValues": [opt(7, "Demo 1")]},
         ]
 
     def request(self, method, url, **kw):
@@ -195,3 +196,68 @@ def test_missing_base_url_is_reported(jira, monkeypatch):
     monkeypatch.setitem(config._runtime_overrides, "jira_base_url", "")
     with pytest.raises(jira_rest.JiraRestError, match="Config page"):
         jira_rest.transition_issue("TC-1", "Pass")
+
+
+def test_detect_custom_fields_matches_by_name(jira):
+    res = jira_rest.detect_custom_fields()
+    assert res["found"][jira_rest.FIELD_SEVERITY] == cf(jira_rest.FIELD_SEVERITY)
+    assert res["found"][jira_rest.FIELD_DEFECT_TYPE] == cf(jira_rest.FIELD_DEFECT_TYPE)  # case/spacing ignored
+    assert res["found"][jira_rest.FIELD_ENVIRONMENT] == cf(jira_rest.FIELD_ENVIRONMENT)
+    assert jira_rest.FIELD_QA_ANALYSIS in res["unmatched"]
+    assert "customfield_sprint" not in res["found"].values()
+    assert {"id": "customfield_sprint", "name": "Sprint"} in res["fields"]
+
+
+# --- Signing in with the saved browser login instead of a token ---------------
+
+@pytest.fixture
+def saved_login(monkeypatch, tmp_path):
+    state = tmp_path / "jira_session.json"
+    state.write_text(json.dumps({"cookies": [
+        {"name": "JSESSIONID", "value": "abc", "domain": "jira.test", "path": "/"},
+        {"name": "seraph.rememberme.cookie", "value": "rm", "domain": ".jira.test", "path": "/"},
+        {"name": "other", "value": "x", "domain": "example.com", "path": "/"},
+    ]}))
+    monkeypatch.setattr(config, "BROWSER_STATE_PATH", str(state))
+    monkeypatch.setattr(jira_rest.secret_store, "get_secret", lambda name: "")
+    monkeypatch.setattr(config, "_runtime_overrides", {"jira_base_url": "https://jira.test"})
+    return state
+
+
+def test_saved_login_used_when_no_token(saved_login):
+    assert jira_rest.auth_mode() == "session"
+    s = jira_rest._session()
+    assert "Authorization" not in s.headers
+    assert s.headers["X-Atlassian-Token"] == "no-check"
+    assert s.cookies.get("JSESSIONID") == "abc"
+    assert s.cookies.get("seraph.rememberme.cookie") == "rm"
+    assert s.cookies.get("other") is None  # cookies for other sites are not sent
+
+
+def test_token_preferred_over_saved_login(saved_login, monkeypatch):
+    monkeypatch.setattr(jira_rest.secret_store, "get_secret", lambda name: "tok" if name == "jira_pat" else "")
+    assert jira_rest.auth_mode() == "token"
+    assert jira_rest._session().headers["Authorization"] == "Bearer tok"
+
+
+def test_no_token_and_no_login_disables_rest(saved_login):
+    saved_login.unlink()
+    assert jira_rest.auth_mode() is None and not jira_rest.is_enabled()
+
+
+def test_expired_login_says_to_log_in_again(saved_login, monkeypatch):
+    class Sess:
+        def request(self, method, url, **kw):
+            return FakeResponse(401, {"errorMessages": ["unauthorized"]})
+
+    monkeypatch.setattr(jira_rest, "_session", lambda: Sess())
+    with pytest.raises(jira_rest.JiraRestError, match="login expired"):
+        jira_rest.transition_issue("TC-1", "Pass")
+
+
+def test_detect_fields_endpoint_reports_missing_login(saved_login, monkeypatch):
+    saved_login.unlink()
+    monkeypatch.setitem(config._runtime_overrides, "jira_project", "BDR")
+    import app as app_module
+    res = app_module.app.test_client().post("/api/detect-fields", json={})
+    assert res.status_code == 400 and "saved Jira login" in res.json["error"]
