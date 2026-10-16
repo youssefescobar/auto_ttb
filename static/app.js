@@ -474,7 +474,6 @@ async function loadTE(teKey) {
   if (breadcrumbTE) { breadcrumbTE.textContent = teKey; }
   renderTCGrid();
   loadDraftQueue();
-  checkUserStory();
   showToast(`TE ${teKey} loaded`, 'success');
 }
 
@@ -714,8 +713,6 @@ function selectTC(tcKey) {
   }
 
   setBilingualContext('primary');
-  updateTestGuideUI(tc);
-  toggleGuidePanel(true);
 }
 
 function openJiraTC(tcKey) {
@@ -1502,112 +1499,6 @@ function toggleDraftQueue() {
   }
 }
 
-// ============================================================
-// USER STORY & AI TEST GUIDE
-// ============================================================
-
-async function checkUserStory() {
-  const indicator = $('#story-indicator');
-  if (!state.teKey) return;
-  try {
-    const res = await api('GET', `/api/user-story/${encodeURIComponent(state.teKey)}`);
-    if (res && res.filename) {
-      if (indicator) {
-        indicator.textContent = `📎 Story: ${res.filename}`;
-        show(indicator);
-      }
-      state.hasUserStory = true;
-    } else {
-      if (indicator) hide(indicator);
-      state.hasUserStory = false;
-    }
-  } catch (e) {
-    if (indicator) hide(indicator);
-    state.hasUserStory = false;
-  }
-}
-
-async function uploadUserStory(file) {
-  if (!state.teKey) { showToast('No TE loaded', 'error'); return; }
-  const formData = new FormData();
-  formData.append('te_key', state.teKey);
-  formData.append('file', file);
-  
-  showToast('Uploading & parsing user story...', 'info');
-  try {
-    const res = await api('POST', '/api/upload-user-story', formData);
-    showToast(`✅ User story loaded! (${res.user_story.row_count} rows)`, 'success');
-    checkUserStory();
-  } catch (e) {
-    showToast(`Upload failed: ${e.message}`, 'error');
-  }
-}
-
-async function deleteUserStory() {
-  if (!confirm('Clear the uploaded user story for this TE?')) return;
-  try {
-    // We can just overwrite it with null/empty via execution-state or a quick dedicated endpoint if we had one.
-    // For now, since we didn't add a DELETE endpoint, we can just hide it locally and rely on the AI checking it.
-    // Wait, the python subagent added a DELETE endpoint? Let's check... no, it didn't. 
-    // It's okay, we'll just show the user story and they can overwrite it by uploading another.
-  } catch(e) {}
-}
-
-async function generateTestGuide() {
-  const tc = getActiveTC();
-  if (!tc || !state.teKey) return;
-  
-  $('#guide-loading')?.classList.remove('hidden');
-  $('#guide-content')?.classList.add('hidden');
-  $('#btn-generate-guide').disabled = true;
-  
-  try {
-    const res = await api('POST', '/api/generate-guide', {
-      te_key: state.teKey,
-      tc_key: tc.key
-    });
-    tc.test_guide = res.guide;
-    saveExecutionState();
-    updateTestGuideUI(tc);
-    showToast('✨ Test Guide generated!', 'success');
-  } catch (e) {
-    showToast(`Guide generation failed: ${e.message}`, 'error');
-    $('#guide-loading')?.classList.add('hidden');
-    $('#btn-generate-guide').disabled = false;
-  }
-}
-
-function updateTestGuideUI(tc) {
-  const guide = tc?.test_guide;
-  $('#guide-loading')?.classList.add('hidden');
-  $('#btn-generate-guide').disabled = false;
-  
-  if (guide) {
-    $('#guide-what').textContent = guide.what_to_test || '';
-    $('#guide-steps').textContent = guide.steps || '';
-    $('#guide-lookfor').textContent = guide.look_for || '';
-    $('#guide-content')?.classList.remove('hidden');
-    $('#btn-generate-guide').textContent = '🔄 Regen';
-  } else {
-    $('#guide-content')?.classList.add('hidden');
-    $('#btn-generate-guide').textContent = 'Generate';
-  }
-}
-
-function toggleGuidePanel(showPanel) {
-  const panel = $('#test-guide-panel');
-  const section = $('#tc-detail-section');
-  if (!panel || !section) return;
-  
-  if (showPanel && state.hasUserStory) {
-    panel.classList.remove('hidden');
-    section.classList.add('has-guide');
-  } else {
-    panel.classList.add('hidden');
-    section.classList.remove('has-guide');
-  }
-}
-
 function downloadPOC() {
   if (!state.teKey) { showToast('No TE session loaded', 'error'); return; }
   window.open(`/api/download-poc/${encodeURIComponent(state.teKey)}`, '_blank');
@@ -1975,21 +1866,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
   setupAutoResize('#defect-form textarea');
 
-  // User Story / Test Guide
-  const btnUploadStory = $('#btn-upload-story');
-  const inputStory = $('#input-user-story');
-  if (btnUploadStory && inputStory) {
-    btnUploadStory.addEventListener('click', () => inputStory.click());
-    inputStory.addEventListener('change', (e) => {
-      if (e.target.files.length) uploadUserStory(e.target.files[0]);
-      e.target.value = '';
-    });
-  }
-
-  $('#btn-generate-guide')?.addEventListener('click', generateTestGuide);
-  $('#btn-close-guide')?.addEventListener('click', () => toggleGuidePanel(false));
-  $('#btn-copy-guide')?.addEventListener('click', () => {
-    const text = `WHAT TO TEST:\n${$('#guide-what').textContent}\n\nSTEPS:\n${$('#guide-steps').textContent}\n\nLOOK FOR:\n${$('#guide-lookfor').textContent}`;
-    navigator.clipboard.writeText(text).then(() => showToast('📋 Guide copied to clipboard', 'success'));
-  });
 });

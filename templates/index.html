@@ -21,14 +21,14 @@
         <button class="breadcrumb-item btn-ghost" onclick="goHome()">Home</button>
         <span class="breadcrumb-sep">/</span>
         <span id="breadcrumb-te" class="breadcrumb-item active"></span>
-        <select id="te-env-select" class="env-select" style="margin-left: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-muted); padding: 0.15rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.75rem; cursor: pointer; outline: none;">
+        <select id="te-env-select" class="select-sm" aria-label="Environment">
         </select>
-        <select id="te-lang-select" class="lang-select" style="margin-left: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-muted); padding: 0.15rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.75rem; cursor: pointer; outline: none;">
+        <select id="te-lang-select" class="select-sm" aria-label="Language">
         </select>
-        <div class="link-te-container" style="display: inline-flex; align-items: center; margin-left: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.15rem 0.5rem;">
-          <input type="checkbox" id="te-link-toggle" title="Enable Linked TE" style="margin-right: 0.3rem;">
-          <input type="text" id="te-link-input" placeholder="Linked TE (e.g. QA-123)" style="background: transparent; border: none; color: var(--text-muted); font-size: 0.75rem; width: 120px; outline: none;">
-        </div>
+        <label class="linked-te" title="Enable linked TE">
+          <input type="checkbox" id="te-link-toggle">
+          <input type="text" id="te-link-input" placeholder="Linked TE" aria-label="Linked TE key">
+        </label>
       </nav>
     </div>
     <div class="topbar-right">
@@ -81,21 +81,18 @@
 
       <div class="toolbar">
         <div class="toolbar-left">
-          <button id="btn-raise-adhoc-defect" class="btn btn-sm btn-primary" style="background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4)">🐛 Ad-Hoc Defect</button>
+          <button id="btn-raise-adhoc-defect" class="btn btn-sm btn-danger-outline">🐛 Ad-Hoc Defect</button>
           <button id="btn-show-add-tc" class="btn btn-sm btn-outline">＋ Add TC</button>
           <button id="btn-add-multiple-tc" class="btn btn-sm btn-outline">📋 Bulk Add</button>
           <div class="toolbar-divider"></div>
-          <button id="btn-show-draft-queue" class="btn btn-sm btn-outline" style="background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3)">📦 Draft Queue <span id="draft-queue-badge" class="draft-badge hidden">0</span></button>
+          <button id="btn-show-draft-queue" class="btn btn-sm btn-accent">📦 Draft Queue <span id="draft-queue-badge" class="draft-badge hidden">0</span></button>
           <div class="toolbar-divider"></div>
-          <button id="btn-rebuild-pot" class="btn btn-sm btn-secondary">📄 Generate POT</button>
-          <button id="btn-upload-story" class="btn btn-sm btn-outline">📎 User Story</button>
-          <input type="file" id="input-user-story" accept=".xlsx,.xls,.csv" class="hidden">
-          <span id="story-indicator" class="badge text-xs hidden" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; cursor: pointer;" title="Click to clear user story">📎 Story loaded</span>
+          <button id="btn-rebuild-pot" class="btn btn-sm btn-outline">📄 Generate POT</button>
           <button id="btn-download-poc" class="btn btn-sm btn-outline">⬇ Download POT</button>
           <button id="btn-delete-te" class="btn btn-sm btn-danger-outline">🗑 Delete TE</button>
         </div>
         <div class="toolbar-right">
-          <input type="text" id="tc-search-input" placeholder="Search..." class="input-sm">
+          <input type="search" id="tc-search-input" placeholder="Search test cases" class="input-sm" aria-label="Search test cases">
           <div class="filter-pills">
             <button class="filter-pill active" data-filter="all">All</button>
             <button class="filter-pill" data-filter="pending">Pending</button>
@@ -109,7 +106,7 @@
 
       <!-- Add TC inputs (hidden by default) -->
       <div id="add-tc-container" class="hidden add-tc-bar">
-        <input type="text" id="new-tc-input" placeholder="BDR-22842  TC038_AP User - View...">
+        <input type="text" id="new-tc-input" placeholder="JIRA-123  TC001 Test case name">
         <button id="btn-add-tc-submit" class="btn btn-primary btn-sm">Add</button>
       </div>
       <div id="add-multiple-tc-container" class="hidden add-tc-bar">
@@ -148,13 +145,13 @@
           <h2 id="detail-tc-key">TC-XXXXX</h2>
           <span id="detail-tc-status" class="status-badge pending">PENDING</span>
         </div>
-        <div class="detail-header-center hidden" id="bilingual-toggle-container" style="display: flex; gap: 0.25rem; background: var(--bg-body); padding: 0.25rem; border-radius: var(--radius-md); border: 1px solid var(--border);">
-          <button id="toggle-lang-en" class="btn btn-sm btn-ghost active" style="min-width: 60px;">EN</button>
-          <button id="toggle-lang-ar" class="btn btn-sm btn-ghost" style="min-width: 60px;">AR</button>
+        <div class="detail-header-center seg-toggle hidden" id="bilingual-toggle-container">
+          <button id="toggle-lang-en" class="btn btn-sm btn-ghost active">EN</button>
+          <button id="toggle-lang-ar" class="btn btn-sm btn-ghost">AR</button>
         </div>
         <div class="detail-header-right">
           <div class="inline-field">
-            <label>Jira #</label>
+            <label for="tc-number-input">Jira #</label>
             <input type="text" id="tc-number-input" placeholder="QA-335455" class="input-sm">
           </div>
           <button id="btn-open-jira-tc" class="btn btn-sm btn-outline">🔗 Jira</button>
@@ -206,39 +203,7 @@
       <div class="action-buttons">
         <button id="btn-pass" class="btn btn-pass">✅ Pass</button>
         <button id="btn-fail" class="btn btn-fail">❌ Fail</button>
-        <button id="btn-skip" class="btn btn-ghost">⏭ Skip</button>
-      </div>
-
-      <!-- Test Guide side panel (collapsible) -->
-      <div id="test-guide-panel" class="test-guide-panel hidden">
-        <div class="guide-header">
-          <h3 style="margin:0; font-size: 0.95rem;">🧭 Test Guide</h3>
-          <div>
-            <button class="btn btn-xs btn-outline" id="btn-generate-guide">Generate</button>
-            <button class="btn btn-xs btn-ghost" id="btn-close-guide" style="padding: 0 4px;">&times;</button>
-          </div>
-        </div>
-        <div id="guide-loading" class="hidden" style="text-align:center; padding: 1rem; color: var(--text-muted);">
-          <div class="spinner" style="margin: 0 auto 0.5rem auto;"></div>
-          <small>AI reading user story...</small>
-        </div>
-        <div id="guide-content" class="guide-content hidden">
-          <div class="guide-section">
-            <label>What to Test</label>
-            <p id="guide-what" style="font-size: 0.95rem; margin: 0;"></p>
-          </div>
-          <div class="guide-section">
-            <label>Steps</label>
-            <div id="guide-steps" style="font-size: 0.9rem; white-space: pre-wrap; line-height: 1.6;"></div>
-          </div>
-          <div class="guide-section">
-            <label>Look For</label>
-            <div id="guide-lookfor" style="font-size: 0.9rem; white-space: pre-wrap; line-height: 1.6;"></div>
-          </div>
-          <div class="guide-section guide-excerpt">
-            <button id="btn-copy-guide" class="btn btn-xs btn-outline w-full">📋 Copy Guide</button>
-          </div>
-        </div>
+        <button id="btn-skip" class="btn btn-outline">⏭ Skip</button>
       </div>
 
     </section>
@@ -249,11 +214,11 @@
         <button class="btn btn-ghost" onclick="goBackToGrid()">← Back</button>
         <button class="btn btn-ghost" onclick="goHome()">🏠 Home</button>
       </div>
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h2 id="defect-preview-title" style="margin: 0;">Defect Preview</h2>
-        <div class="defect-bilingual-toggle hidden" id="defect-bilingual-toggle-container" style="display: flex; gap: 0.25rem; background: var(--bg-body); padding: 0.25rem; border-radius: var(--radius-md); border: 1px solid var(--border);">
-          <button id="defect-toggle-lang-en" class="btn btn-sm btn-ghost active" style="min-width: 60px;">EN</button>
-          <button id="defect-toggle-lang-ar" class="btn btn-sm btn-ghost" style="min-width: 60px;">AR</button>
+      <div class="defect-preview-header">
+        <h2 id="defect-preview-title">Defect Preview</h2>
+        <div class="defect-bilingual-toggle seg-toggle hidden" id="defect-bilingual-toggle-container">
+          <button id="defect-toggle-lang-en" class="btn btn-sm btn-ghost active">EN</button>
+          <button id="defect-toggle-lang-ar" class="btn btn-sm btn-ghost">AR</button>
         </div>
       </div>
 
@@ -285,7 +250,7 @@
           <div class="form-row">
             <div class="form-group">
               <label>Test Data</label>
-              <textarea id="defect-test-data" rows="2" placeholder="e.g. MSISDN: 9665XXXXXXX"></textarea>
+              <textarea id="defect-test-data" rows="2" placeholder="Accounts, numbers, data used"></textarea>
             </div>
             <div class="form-group">
               <label>QA Analysis</label>
@@ -311,7 +276,7 @@
           </div>
           <div class="form-group">
             <label>Assignee</label>
-            <input type="text" id="defect-assignee" placeholder="e.g. Saurabh Shukla">
+            <input type="text" id="defect-assignee" placeholder="Jira username or name">
           </div>
           <div class="fixed-fields-box">
             <h4>Auto-Filled Jira Fields</h4>
@@ -323,10 +288,10 @@
       </div>
 
       <div class="defect-actions">
-        <button id="btn-draft-defect" class="btn btn-primary">🤖 Draft with AI</button>
+        <button id="btn-draft-defect" class="btn btn-outline">🤖 Draft with AI</button>
         <button id="btn-regenerate-defect" class="btn btn-outline">🔄 Regenerate</button>
         <button id="btn-copy-defect" class="btn btn-outline">📋 Copy</button>
-        <button id="btn-save-as-draft" class="btn btn-outline" style="background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3)">📦 Save as Draft</button>
+        <button id="btn-save-as-draft" class="btn btn-accent">📦 Save as Draft</button>
         <button id="btn-submit-defect" class="btn btn-primary btn-lg">🚀 Submit to Jira</button>
       </div>
 
