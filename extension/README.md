@@ -13,7 +13,8 @@ A Chrome/Edge side panel (it replaced the old local Python server). It runs insi
 - **Pass / Fail / Blocked / Executing** set the test run status in the Xray execution (PASS, FAIL, BLOCKED, EXECUTING; Reset sets TODO). Optionally Pass and Fail also add a Jira comment with the Actual screenshots.
 - Add a note and a linked defect key per test case.
 - **Download PoT** builds the Proof of Testing Word file in the browser, with the same layout as before.
-- Everything is stored in this browser profile (IndexedDB). Settings → Export backup saves it to a file.
+- Everything is stored in this browser profile (IndexedDB). Settings → Export backup saves it to a file. Settings → Old app data imports the Python app's `db.json` and `executions` folder.
+- PoT files are not stored anywhere: **Download PoT** at the top of an open test execution builds the file from what's saved and puts it in your browser's Downloads folder as `PoT_<TE>.docx`.
 
 ### Defects
 

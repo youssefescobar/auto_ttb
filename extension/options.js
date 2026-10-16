@@ -2,7 +2,8 @@ import { SECTIONS, getSettings, originOf, saveSettings, normaliseBaseUrl, projec
 import { Jira } from "./lib/jira.js";
 import { detectCustomFields } from "./lib/defect.js";
 import { GEMINI_ORIGIN } from "./lib/ai.js";
-import { exportAll, importAll } from "./lib/store.js";
+import { addShot, exportAll, importAll, listTes, saveTe, shotsForTe } from "./lib/store.js";
+import { matchOldShots, mergeOldDb } from "./lib/legacy.js";
 
 const form = document.getElementById("form");
 const status = document.getElementById("status");
@@ -161,6 +162,51 @@ document.getElementById("import-old").addEventListener("change", async (e) => {
     show(`Filled ${n} settings from ${file.name}. Review them, then click Save.`, "ok");
   } catch (err) {
     show(`Couldn't read ${file.name}: ${err.message}`, "error");
+  }
+  e.target.value = "";
+});
+
+const legacyStatus = document.getElementById("legacy-status");
+function legacy(msg, kind = "muted") {
+  legacyStatus.textContent = msg;
+  legacyStatus.className = kind;
+}
+
+document.getElementById("import-db").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const tes = mergeOldDb(JSON.parse(await file.text()), await listTes());
+    for (const te of tes) await saveTe(te);
+    const tcs = tes.reduce((n, te) => n + te.test_cases.length, 0);
+    legacy(`Imported ${tes.length} test executions (${tcs} test cases). Now pick the old executions folder for the screenshots.`, "ok");
+  } catch (err) {
+    legacy(`Couldn't import ${file.name}: ${err.message}`, "error");
+  }
+  e.target.value = "";
+});
+
+document.getElementById("import-shots").addEventListener("change", async (e) => {
+  const files = [...e.target.files];
+  if (!files.length) return;
+  try {
+    const shots = matchOldShots(files, await listTes());
+    if (!shots.length) throw new Error("no screenshots matched. Import db.json first, then pick the folder named executions.");
+    const have = new Map();
+    let added = 0;
+    for (const [i, s] of shots.entries()) {
+      if (!have.has(s.te_key)) have.set(s.te_key, new Set((await shotsForTe(s.te_key)).map((x) => `${x.tc_key}/${x.category}/${x.name}`)));
+      const seen = have.get(s.te_key);
+      const id = `${s.tc_key}/${s.category}/${s.name}`;
+      if (seen.has(id)) continue; // already imported
+      await addShot({ te_key: s.te_key, tc_key: s.tc_key, category: s.category, name: s.name, blob: new Blob([s.file], { type: s.file.type || "image/png" }) });
+      seen.add(id);
+      added++;
+      if (i % 20 === 0) legacy(`Importing screenshots… ${i + 1} of ${shots.length}`);
+    }
+    legacy(`Imported ${added} screenshots${added < shots.length ? ` (${shots.length - added} were already there)` : ""}.`, "ok");
+  } catch (err) {
+    legacy(`Couldn't import screenshots: ${err.message}`, "error");
   }
   e.target.value = "";
 });

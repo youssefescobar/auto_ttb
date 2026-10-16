@@ -13,4 +13,5 @@ Install and usage: [`extension/README.md`](extension/README.md).
 The Flask app (`app.py`) was retired once the extension covered everything it did. It is still in git history before this change.
 
 - **Settings:** in the extension, open Settings → **Import old app settings** and pick your old `settings_overrides.json`, then Save.
+- **Test executions and screenshots:** in Settings → Old app data, click **1. Import db.json** and pick the old `db.json`. Then click **2. Import executions folder** and pick the old `executions` folder. Statuses, notes and defect keys come across. Old "skip" results become Pending with the note "Skipped", and draft defect keys that were never filed are left out.
 - **Local files:** the old `executions/` folders, `jira_session.json` and `settings_overrides.json` are no longer used. Delete them when you no longer need them (the last two hold your Jira login and keys).

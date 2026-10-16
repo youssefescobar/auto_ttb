@@ -25,6 +25,16 @@
       <label class="button">Import old app settings<input id="import-old" type="file" accept="application/json" hidden></label>
     </div>
   </section>
+
+  <section>
+    <h2>Old app data</h2>
+    <p class="muted">Brings over the Python app's test executions, then their screenshots. Test executions already in the extension are kept and only filled in.</p>
+    <div class="row">
+      <label class="button">1. Import db.json<input id="import-db" type="file" accept="application/json" hidden></label>
+      <label class="button">2. Import executions folder<input id="import-shots" type="file" webkitdirectory hidden></label>
+    </div>
+    <p id="legacy-status" class="muted"></p>
+  </section>
   <script type="module" src="options.js"></script>
 </body>
 </html>
