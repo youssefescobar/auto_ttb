@@ -115,3 +115,16 @@ test("names required fields that have no value", () => {
   const m = { typeId: "1", fields: { summary: { required: true }, customfield_9: { name: "Defect Phase", required: true } } };
   assert.throws(() => buildDefectFields({ jira_project: "BDR", field_phase: "customfield_9" }, m, { title: "x" }), /no value in Settings → Defects: Defect Phase\./);
 });
+
+test("cascading field without listed options is sent by name", () => {
+  const f = { name: "Defect Type", schema: { custom: "x:cascadingselect" }, allowedValues: [{ id: "1", value: "P" }] };
+  assert.deepEqual(formatValue(f, ["P", "BDR-ANDROID"]), { id: "1", child: { value: "BDR-ANDROID" } });
+  assert.throws(() => formatValue(f, ["P", ""]), /Filed against\) is empty\./);
+  assert.deepEqual(formatValue({ ...f, allowedValues: undefined }, ["P", "C"]), { value: "P", child: { value: "C" } });
+});
+
+test("defect type field found by name even without its ID in Settings", () => {
+  const { fields } = buildDefectFields({ jira_project: "BDR", defect_type: "B2B Digital Revamp", filed_against: "BDR-ANDROID" }, meta, { title: "x" });
+  assert.deepEqual(fields.customfield_4, { id: "41119", child: { id: "41813" } });
+  assert.throws(() => buildDefectFields({ jira_project: "BDR" }, meta, { title: "x" }), /needs both values/);
+});

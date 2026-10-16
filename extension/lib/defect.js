@@ -68,15 +68,18 @@ export function formatValue(meta, value) {
 
   if (custom.includes("cascadingselect")) {
     const [parent, child] = value;
+    if (!allowed?.length) return child ? { value: String(parent).trim(), child: { value: String(child).trim() } } : null;
     const p = matchOption(allowed, parent);
     if (!p) throw new Error(`${meta.name || "Cascading field"}: "${parent}" (Settings → Defects → Defect type) is not one of: ${optionLabels(allowed).join(", ")}.`);
     const out = { id: p.id };
     // Jira needs both levels; a lone child option is unambiguous
     const c = child ? matchOption(p.children, child) : p.children?.length === 1 ? p.children[0] : null;
     if (c) out.child = { id: c.id };
-    else if (p.children?.length) {
-      const what = child ? `"${child}" is not one of` : "is empty. Pick one of";
-      throw new Error(`${meta.name || "Cascading field"}: the second value (Settings → Defects → Filed against) ${what}: ${optionLabels(p.children).join(", ")}.`);
+    else if (child && !p.children?.length) out.child = { value: String(child).trim() }; // create screen didn't list the options
+    else if (p.children?.length || !child) {
+      const labels = optionLabels(p.children).join(", ");
+      const what = child ? `"${child}" is not one of: ${labels}` : `is empty${labels ? `. Pick one of: ${labels}` : ""}`;
+      throw new Error(`${meta.name || "Cascading field"}: the second value (Settings → Defects → Filed against) ${what}.`);
     }
     return out;
   }
@@ -164,9 +167,13 @@ export function buildDefectFields(settings, meta, draft) {
   if (description && "description" in meta.fields) fields.description = description;
 
   const skipped = [];
+  const detected = detectCustomFields(meta.fields).found; // fallback for IDs not set in Settings
   for (const [key, value] of wanted) {
+    const id = key.startsWith("field_") ? settings[key] || detected[key] : key;
+    if (key === "field_defect_type" && id && meta.fields[id] && !settings.defect_type) {
+      throw new Error(`${meta.fields[id].name || "Defect type"} needs both values: set Settings → Defects → Defect type and Filed against.`);
+    }
     if (value === undefined || value === null || value === "" || (Array.isArray(value) && !value.length)) continue;
-    const id = key.startsWith("field_") ? settings[key] : key;
     if (!id) continue;
     if (!meta.fields[id]) {
       skipped.push(`${id} (not on the create screen)`);
