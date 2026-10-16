@@ -108,20 +108,24 @@ export class Jira {
     return out;
   }
 
-  // Returns { te_key, summary, url, test_cases: [{ key, summary }] }.
+  // Returns { te_key, summary, url, xray, test_cases: [{ key, summary, run_id?, xray_status? }] }.
   // Tries Xray's Test Execution API, then the issue's links and sub-tasks.
   async fetchTestExecution(teKey) {
     const te = teKey.toUpperCase();
     const issue = await this.request("GET", `/rest/api/2/issue/${te}`, { params: { fields: "summary,issuelinks,subtasks" } });
     const fields = issue?.fields || {};
-    let keys = [];
+    const runs = {}; // test key -> { run_id, xray_status }
     try {
       const tests = await this.request("GET", `/rest/raven/1.0/api/testexec/${te}/test`);
-      keys = (tests || []).map((t) => t.key).filter(Boolean);
+      for (const t of tests || []) {
+        if (t.key) runs[t.key.toUpperCase()] = { run_id: t.id, xray_status: t.status };
+      }
     } catch (e) {
       if (e.status === 401) throw e; // anything else: Xray missing or not a Test Execution
     }
-    if (!keys.length) {
+    const xray = Object.keys(runs).length > 0;
+    let keys = Object.keys(runs);
+    if (!xray) {
       for (const link of fields.issuelinks || []) {
         const other = link.outwardIssue || link.inwardIssue;
         if (other?.key) keys.push(other.key);
@@ -134,8 +138,22 @@ export class Jira {
       te_key: te,
       summary: fields.summary || "",
       url: this.issueUrl(te),
-      test_cases: keys.map((k) => ({ key: k, summary: names[k] || "" })),
+      xray,
+      test_cases: keys.map((k) => ({ key: k, summary: names[k] || "", ...runs[k] })),
     };
+  }
+
+  // Xray keeps a test's result on its test run inside the execution, not on the
+  // Test issue's workflow. status: PASS, FAIL, TODO, or a custom Xray status.
+  async setTestRunStatus(teKey, testKey, status, runId) {
+    let id = runId;
+    if (!id) {
+      const run = await this.request("GET", "/rest/raven/1.0/api/testrun", { params: { testExecIssueKey: teKey, testIssueKey: testKey } });
+      id = run?.id;
+      if (!id) throw new JiraError(`${testKey} has no test run in ${teKey}.`);
+    }
+    await this.request("PUT", `/rest/raven/1.0/api/testrun/${id}/status`, { params: { status } });
+    return id;
   }
 }
 
