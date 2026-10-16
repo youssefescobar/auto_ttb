@@ -100,3 +100,18 @@ test("project key from the name Jira displays", async () => {
   assert.equal(projectKey(" bdr "), "BDR");
   assert.equal(projectKey(""), "");
 });
+
+test("cascading field: loose child match, lone child, clear errors", () => {
+  const f = meta.fields.customfield_4;
+  assert.deepEqual(formatValue(f, ["B2B Digital Revamp", "bdr android"]), { id: "41119", child: { id: "41813" } });
+  assert.deepEqual(formatValue(f, ["B2B Digital Revamp", ""]), { id: "41119", child: { id: "41813" } });
+  const two = { ...f, allowedValues: [{ id: "1", value: "P", children: [{ id: "a", value: "A" }, { id: "b", value: "B" }] }] };
+  assert.throws(() => formatValue(two, ["P", ""]), /Filed against\) is empty\. Pick one of: A, B/);
+  assert.throws(() => formatValue(two, ["P", "C"]), /"C" is not one of: A, B/);
+  assert.throws(() => formatValue(two, ["Q", "A"]), /"Q" .* is not one of: P/);
+});
+
+test("names required fields that have no value", () => {
+  const m = { typeId: "1", fields: { summary: { required: true }, customfield_9: { name: "Defect Phase", required: true } } };
+  assert.throws(() => buildDefectFields({ jira_project: "BDR", field_phase: "customfield_9" }, m, { title: "x" }), /no value in Settings → Defects: Defect Phase\./);
+});

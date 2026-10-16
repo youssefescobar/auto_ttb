@@ -47,8 +47,15 @@ export function detectCustomFields(metaFields) {
 
 function matchOption(allowed, value) {
   const v = String(value).trim().toLowerCase();
-  return (allowed || []).find((o) => ["value", "name", "key"].some((k) => String(o[k] ?? "").trim().toLowerCase() === v)) || null;
+  const opts = allowed || [];
+  const label = (o, k) => String(o[k] ?? "");
+  return opts.find((o) => ["value", "name", "key"].some((k) => label(o, k).trim().toLowerCase() === v))
+    // "BDR Android" still finds "BDR-ANDROID"
+    || opts.find((o) => ["value", "name"].some((k) => norm(label(o, k)) && norm(label(o, k)) === norm(value)))
+    || null;
 }
+
+const optionLabels = (opts) => (opts || []).map((o) => o.value ?? o.name).filter(Boolean);
 
 const splitComma = (v) => (Array.isArray(v) ? v : String(v).split(",")).map((x) => String(x).trim()).filter(Boolean);
 
@@ -62,10 +69,15 @@ export function formatValue(meta, value) {
   if (custom.includes("cascadingselect")) {
     const [parent, child] = value;
     const p = matchOption(allowed, parent);
-    if (!p) return null;
+    if (!p) throw new Error(`${meta.name || "Cascading field"}: "${parent}" (Settings → Defects → Defect type) is not one of: ${optionLabels(allowed).join(", ")}.`);
     const out = { id: p.id };
-    const c = child ? matchOption(p.children, child) : null;
+    // Jira needs both levels; a lone child option is unambiguous
+    const c = child ? matchOption(p.children, child) : p.children?.length === 1 ? p.children[0] : null;
     if (c) out.child = { id: c.id };
+    else if (p.children?.length) {
+      const what = child ? `"${child}" is not one of` : "is empty. Pick one of";
+      throw new Error(`${meta.name || "Cascading field"}: the second value (Settings → Defects → Filed against) ${what}: ${optionLabels(p.children).join(", ")}.`);
+    }
     return out;
   }
   if (type === "array") {
@@ -91,7 +103,7 @@ export function formatValue(meta, value) {
 
 // Allowed values of a field (for pickers), or [] when it's free text.
 export function optionsFor(metaFields, fieldId) {
-  return (metaFields?.[fieldId]?.allowedValues || []).map((o) => o.value ?? o.name).filter(Boolean);
+  return optionLabels(metaFields?.[fieldId]?.allowedValues);
 }
 
 export function buildDescription(d) {
@@ -167,5 +179,12 @@ export function buildDefectFields(settings, meta, draft) {
     }
     fields[id] = formatted;
   }
+  const missing = Object.entries(meta.fields)
+    .filter(([id, m]) => m.required && !m.hasDefaultValue && !(id in fields) && !["attachment", "issuelinks", "reporter", "assignee"].includes(id))
+    .map(([id, m]) => {
+      const key = Object.keys(FIELD_NAMES).find((k) => settings[k] === id);
+      return `${m.name || id}${key ? "" : ` (${id}; set its ID in Settings → Advanced)`}`;
+    });
+  if (missing.length) throw new Error(`Jira requires these fields, but they have no value in Settings → Defects: ${missing.join(", ")}.`);
   return { fields, skipped };
 }
