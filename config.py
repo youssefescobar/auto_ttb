@@ -1,23 +1,20 @@
 """
 All app settings live here and are edited on the web app's Config page (/config).
 
-Values are read at call time with `config.get(key)`, in this order:
-  1. the OS credential store (secrets only)
-  2. settings saved from the Config page (settings_overrides.json)
-  3. an entry in .env with the upper-case key name (optional, from older versions)
-  4. the default below
+Values are read at call time with `config.get(key)`: secrets from the OS credential
+store, everything else from settings saved on the Config page (settings_overrides.json),
+falling back to the default below when a setting is unset or empty.
 
 No company, project or Jira-instance values are built in: those defaults are empty.
 Only generic behaviour (timeouts, Jira's standard transition names, ...) has a default.
 """
 import os
 import json
-from dotenv import dotenv_values, load_dotenv
+from dotenv import load_dotenv
 
 import secret_store
 
-load_dotenv()  # secrets fallback (JIRA_PAT, GEMINI_API_KEY) and proxy vars
-_ENV_FILE = {k.lower(): v for k, v in dotenv_values(".env").items() if v}
+load_dotenv()  # secret_store falls back to JIRA_PAT / GEMINI_API_KEY env vars
 
 # Local file paths (not user settings)
 EXECUTIONS_DIR = "executions"
@@ -129,11 +126,8 @@ def get(key, default=None):
     key = _ALIASES.get(key, key)
     if key in secret_store.SECRETS:
         return secret_store.get_secret(key) or default
-    if _runtime_overrides.get(key, "") != "":  # an emptied field falls back to the default
-        val = _runtime_overrides[key]
-    elif key in _ENV_FILE:
-        val = _ENV_FILE[key]
-    else:
+    val = _runtime_overrides.get(key, "")
+    if val == "":  # unset or emptied on the Config page
         val = DEFAULTS.get(key, default)
 
     kind = TYPES.get(key)

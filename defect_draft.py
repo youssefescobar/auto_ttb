@@ -73,7 +73,7 @@ def generate_defect_title(notes: str, tc_key: str = "", te_key: str = "", expect
     pattern = config.get("defect_title_pattern")
     
     if "{AI_TITLE}" in pattern:
-        formatted_title = pattern.format(TE_KEY=te_key, TC_KEY=tc_key, AI_TITLE=ai_title)
+        formatted_title = pattern.format(PREFIX=prefix, TE_KEY=te_key, TC_KEY=tc_key, AI_TITLE=ai_title)
     else:
         formatted_title = f"{prefix}{ai_title}"
 
