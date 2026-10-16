@@ -105,7 +105,11 @@ def jira(monkeypatch):
 
     monkeypatch.setattr(jira_rest, "_session", lambda: Sess())
     monkeypatch.setattr(jira_rest.secret_store, "get_secret", lambda name: "tok" if name == "jira_pat" else "")
-    monkeypatch.setattr(config, "_runtime_overrides", {})
+    monkeypatch.setattr(config, "_runtime_overrides", {"jira_project": "BDR", "defect_issue_type": "Defect"})
+    monkeypatch.setattr(config, "DEFECT_BOILERPLATE", {
+        **config.DEFECT_BOILERPLATE, "components": ["Android"], "defect_type": "B2B Digital Revamp",
+        "filed_against": "BDR-ANDROID", "defect_environment": "Integration", "labels": ["Lightmode"],
+    })
     return fake
 
 
