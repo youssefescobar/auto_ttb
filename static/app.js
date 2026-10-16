@@ -17,7 +17,6 @@ const state = {
   currentTC: null,
   screenshots: { expected: [], actual: [] },
   settings: {},
-  defectDrafts: {},
 };
 
 
@@ -370,9 +369,8 @@ function refreshDefectView() {
   const tcKey = tc.key;
   $('#defect-preview-title').textContent = `Defect Preview — ${tcKey}`;
 
-  const existingDraft = state.defectDrafts[tcKey];
-  if (existingDraft) {
-    populateDefectForm(existingDraft);
+  if (tc.ai_draft) {
+    populateDefectForm(tc.ai_draft);
   } else if (tc.submitted_defect) {
     populateDefectForm(tc.submitted_defect);
   } else {
@@ -766,19 +764,7 @@ function goHome() {
 
 function goBackToGrid() {
   if (state.currentTC && !$('#defect-preview-section').classList.contains('hidden')) {
-    state.defectDrafts[state.currentTC] = {
-      ...(state.defectDrafts[state.currentTC] || {}),
-      title: $('#defect-title').value,
-      scenario: $('#defect-scenario').value,
-      steps: $('#defect-steps').value,
-      expected: $('#defect-expected').value,
-      actual: $('#defect-actual').value,
-      severity: $('#defect-severity').value,
-      blocked_tcs: $('#defect-blocked-tcs').value,
-      assignee: $('#defect-assignee').value,
-      test_data: $('#defect-test-data').value,
-      qa_analysis: $('#defect-qa-analysis').value,
-    };
+    persistDefectDraft();
   }
   hide($('#tc-detail-section'));
   hide($('#defect-preview-section'));
@@ -1077,6 +1063,39 @@ async function rememberTestData() {
   } catch (e) {}
 }
 
+/** Read the defect form into a plain object */
+function readDefectForm() {
+  return {
+    title: $('#defect-title').value,
+    scenario: $('#defect-scenario').value,
+    steps: $('#defect-steps').value,
+    expected: $('#defect-expected').value,
+    actual: $('#defect-actual').value,
+    test_data: $('#defect-test-data').value,
+    qa_analysis: $('#defect-qa-analysis').value,
+    severity: $('#defect-severity').value,
+    blocked_tcs: $('#defect-blocked-tcs').value,
+    assignee: $('#defect-assignee').value,
+  };
+}
+
+/** Save the defect form on the TC (db.json) so it survives leaving or closing the page */
+function persistDefectDraft() {
+  const tc = getActiveTC();
+  if (!tc || tc.key !== state.currentTC) return;
+  const form = readDefectForm();
+  const contentKeys = ['title', 'scenario', 'steps', 'expected', 'actual', 'test_data', 'qa_analysis'];
+  if (!tc.ai_draft && !contentKeys.some(k => form[k].trim())) return; // nothing drafted yet
+  tc.ai_draft = { ...form, saved_at: new Date().toISOString() };
+  saveExecutionState();
+}
+
+let draftSaveTimer = null;
+function scheduleDefectDraftSave() {
+  clearTimeout(draftSaveTimer);
+  draftSaveTimer = setTimeout(persistDefectDraft, 800);
+}
+
 /** Populate defect form fields from a draft object */
 function populateDefectForm(defect) {
   $('#defect-title').value = defect.title || '';
@@ -1126,9 +1145,8 @@ async function draftDefect() {
       actual_shots: getShotPaths('actual')
     });
 
-    // Persist draft for this TC
-    state.defectDrafts[state.currentTC] = defect;
     populateDefectForm(defect);
+    persistDefectDraft();
 
     if (defect.ai_error) {
       showToast(`⚠️ AI error: ${defect.ai_error}. Loaded fallback template.`, 'error');
@@ -1228,8 +1246,8 @@ async function submitDefect() {
       });
     }
 
+    if (tc) delete tc.ai_draft;
     saveExecutionState();
-    delete state.defectDrafts[state.currentTC];
     rememberTestData();
     const potMsg = res.saved_pot ? ' and saved to POT!' : '!';
     showToast(`❌ Defect ${res.issue_key} created${potMsg}`, 'success');
@@ -1292,7 +1310,6 @@ async function saveAsDraft() {
     tc.status = 'fail';
     tc.draft_defect = payload;
     saveExecutionState();
-    delete state.defectDrafts[state.currentTC];
     showToast('📦 Defect saved as draft — find it in the Draft Queue', 'success');
     goBackToGrid();
     loadDraftQueue();
@@ -1807,6 +1824,17 @@ document.addEventListener('DOMContentLoaded', () => {
       if (state.currentTC) deleteTC(state.currentTC);
     });
   }
+
+  // Autosave defect edits; flush when the tab is hidden or closed
+  $('#defect-form')?.addEventListener('input', scheduleDefectDraftSave);
+  $('#defect-form')?.addEventListener('change', scheduleDefectDraftSave);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && draftSaveTimer) {
+      clearTimeout(draftSaveTimer);
+      draftSaveTimer = null;
+      persistDefectDraft();
+    }
+  });
 
   const btnDraftDefect = $('#btn-draft-defect');
   if (btnDraftDefect) btnDraftDefect.addEventListener('click', draftDefect);
