@@ -12,7 +12,6 @@ import jira_rest
 import defect_draft
 import poc_doc
 import db
-import secret_store
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB upload limit
@@ -45,8 +44,7 @@ def config_page():
 
 @app.route('/api/config-schema', methods=['GET'])
 def api_config_schema():
-    return jsonify({"sections": config.schema(), "missing": config.missing_required(),
-                    "keyring": secret_store.has_keyring()})
+    return jsonify({"sections": config.schema(), "missing": config.missing_required()})
 
 @app.route('/api/detect-fields', methods=['POST'])
 def api_detect_fields():
@@ -80,12 +78,6 @@ def api_settings():
         return jsonify(config.get_all_settings())
 
     data = request.json or {}
-    # Secrets go to the OS credential store, never to settings_overrides.json
-    for secret_key in secret_store.SECRETS:
-        if secret_key in data:
-            value = data.pop(secret_key)
-            if not secret_store.set_secret(secret_key, value):
-                return jsonify({"error": f"Cannot store {secret_key}: the OS credential store is unavailable"}), 400
     config.set_overrides({k: v for k, v in data.items() if k in config.DEFAULTS})
     return jsonify({"status": "updated"})
 

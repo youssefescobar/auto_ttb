@@ -16,7 +16,6 @@ import time
 import requests
 
 import config
-import secret_store
 
 # Config keys holding the Jira custom field IDs (set on the Config page; empty = skip the field).
 FIELD_FOR_PROJECT = "field_for_project"
@@ -49,7 +48,7 @@ def auth_mode() -> str | None:
     """'token', 'session', or None when REST can't be used."""
     if str(config.get("jira_mode")).lower() == "browser":
         return None
-    if secret_store.get_secret("jira_pat"):
+    if config.get("jira_pat"):
         return "token"
     if os.path.exists(config.BROWSER_STATE_PATH):
         return "session"
@@ -92,7 +91,7 @@ def _session() -> requests.Session:
         "X-Atlassian-Token": "no-check",
     })
     if mode == "token":
-        s.headers["Authorization"] = f"Bearer {secret_store.get_secret('jira_pat')}"
+        s.headers["Authorization"] = f"Bearer {config.get('jira_pat')}"
     else:
         _load_session_cookies(s)
     # Corporate CA bundle, if the Jira host uses an internal certificate authority
