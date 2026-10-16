@@ -23,6 +23,7 @@ const state = {
   defectOpen: null, // key of the test case whose defect editor is open
   meta: null, // Defect create screen from Jira, loaded on first use
   duplicates: {}, // tc key -> [{ key, summary, status }]
+  filter: "", // status the test case list is narrowed to ("" = all)
 };
 
 // --- Small DOM helper ------------------------------------------------------
@@ -112,6 +113,7 @@ async function openTe(teKey) {
   state.openTc = null;
   state.defectOpen = null;
   state.duplicates = {};
+  state.filter = "";
   await chrome.storage.local.set({ lastTe: teKey });
   render();
   refreshTeList();
@@ -466,15 +468,15 @@ function shotSection(tc, category) {
   const active = state.pasteTarget === category;
   return h("section", { class: `shots${active ? " paste-target" : ""}`, onclick: () => { if (state.pasteTarget !== category) { state.pasteTarget = category; render(); } } },
     h("div", { class: "row between" },
-      h("strong", {}, `${CATEGORIES[category]} (${shots.length})`),
+      h("strong", {}, CATEGORIES[category], h("span", { class: "muted" }, ` ${shots.length}`)),
       h("span", { class: "row" },
-        h("button", { onclick: () => busy("capture", () => captureTab(tc.key, category)) }, "Capture tab"),
-        h("button", { onclick: () => fileInput.click() }, "Upload"),
+        h("button", { class: "small", onclick: () => busy("capture", () => captureTab(tc.key, category)) }, "Capture tab"),
+        h("button", { class: "small", onclick: () => fileInput.click() }, "Upload"),
         fileInput,
       ),
     ),
-    active ? h("small", { class: "muted" }, "Ctrl+V pastes here") : null,
-    h("div", { class: "thumbs" }, shots.map(thumb)),
+    shots.length ? h("div", { class: "thumbs" }, shots.map(thumb)) : null,
+    h("small", { class: "muted hint" }, active ? "Ctrl+V pastes here" : "Click to paste here"),
   );
 }
 
@@ -484,18 +486,24 @@ function tcItem(tc) {
   // One test case open at a time, switched synchronously so no other stays open
   const header = h("summary", { onclick: (e) => { e.preventDefault(); state.openTc = open ? null : tc.key; render(); } },
     h("span", { class: `dot ${tc.status}`, title: STATUSES[tc.status] }),
-    h("span", { class: "key" }, tc.key),
-    h("span", { class: "summary" }, tc.summary || ""),
-    tc.defect_key ? h("span", { class: "fail-text", title: "Linked defect" }, tc.defect_key) : null,
-    tc.draft?.queued ? h("span", { class: "muted", title: "Defect draft queued" }, "📝") : null,
-    counts ? h("span", { class: "muted" }, `📷${counts}`) : null,
+    h("span", { class: "tc-text" },
+      h("span", { class: "key" }, tc.key),
+      tc.summary ? h("span", { class: "summary", title: tc.summary }, tc.summary) : null),
+    tc.defect_key ? h("span", { class: "badge fail", title: "Linked defect" }, tc.defect_key) : null,
+    tc.draft?.queued ? h("span", { class: "badge", title: "Defect draft queued" }, "draft") : null,
+    counts ? h("span", { class: "badge", title: "Screenshots" }, `📷 ${counts}`) : null,
   );
   const details = h("details", { class: "tc", open }, header);
   if (!open) return details;
 
   // append() would print null as text, so drop the empty slots
+  const statusButton = (status, label) => h("button", {
+    class: `seg seg-${status}${tc.status === status ? " current" : ""}`,
+    onclick: () => busy(status, () => setStatus(tc.key, status)),
+  }, label);
   details.append(...[
-    ISSUE_KEY.test(tc.key) ? h("a", { href: jira().issueUrl(tc.key), target: "_blank" }, "Open in Jira ↗") : null,
+    h("div", { class: "segmented" },
+      statusButton("pass", "Pass"), statusButton("fail", "Fail"), statusButton("blocked", "Blocked"), statusButton("executing", "Executing")),
     shotSection(tc, "expected"),
     shotSection(tc, "actual"),
     h("label", {}, "Note",
@@ -507,12 +515,10 @@ function tcItem(tc) {
         !tc.defect_key && state.defectOpen !== tc.key
           ? h("button", { onclick: () => { state.defectOpen = tc.key; render(); } }, tc.draft ? "Edit draft" : "Report defect")
           : null)),
-    h("div", { class: "row actions" },
-      h("button", { class: `pass${tc.status === "pass" ? " current" : ""}`, onclick: () => busy("pass", () => setStatus(tc.key, "pass")) }, "Pass"),
-      h("button", { class: `fail${tc.status === "fail" ? " current" : ""}`, onclick: () => busy("fail", () => setStatus(tc.key, "fail")) }, "Fail"),
-      h("button", { class: tc.status === "blocked" ? "current" : null, onclick: () => busy("blocked", () => setStatus(tc.key, "blocked")) }, "Blocked"),
-      h("button", { class: tc.status === "executing" ? "current" : null, onclick: () => busy("executing", () => setStatus(tc.key, "executing")) }, "Executing"),
-      tc.status !== "pending" ? h("button", { class: "link", onclick: () => busy("reset", () => setStatus(tc.key, "pending")) }, "Reset") : null,
+    h("div", { class: "row tc-foot" },
+      ISSUE_KEY.test(tc.key) ? h("a", { href: jira().issueUrl(tc.key), target: "_blank" }, "Open in Jira ↗") : null,
+      h("span", { class: "grow" }),
+      tc.status !== "pending" ? h("button", { class: "link", onclick: () => busy("reset", () => setStatus(tc.key, "pending")) }, "Reset status") : null,
       h("button", {
         class: "link danger", onclick: async () => {
           if (!confirm(`Remove ${tc.key} and its screenshots from this execution?`)) return;
@@ -553,21 +559,31 @@ function render() {
   }
   const addInput = h("input", { placeholder: "Add a test case key", autocomplete: "off" });
 
-  main.replaceChildren(
-    h("div", { class: "te-head" },
-      h("h2", {}, te.url ? h("a", { href: te.url, target: "_blank" }, te.te_key) : te.te_key),
-      te.summary ? h("p", { class: "muted" }, te.summary) : null,
-      te.xray === false ? h("p", { class: "warn", title: te.xray_error || "" }, `Xray didn't list this execution's tests (${te.xray_error || "no details"}), so test cases came from its links.`) : null,
-      h("div", { class: "row" }, selectFor("environment", splitList(state.settings.environments)), selectFor("language", splitList(state.settings.languages))),
-      h("p", { class: "counts" },
-        h("span", { class: "pass-text" }, `${count("pass")} passed`), " · ",
-        h("span", { class: "fail-text" }, `${count("fail")} failed`), " · ",
-        `${count("blocked")} blocked · ${count("executing")} executing · ${count("pending")} pending`),
+  const total = te.test_cases.length || 1;
+  const chip = (status, label) => h("button", {
+    class: `chip${state.filter === status ? " on" : ""}`,
+    title: state.filter === status ? "Show all" : `Show only ${label.toLowerCase()}`,
+    onclick: () => { state.filter = state.filter === status ? "" : status; render(); },
+  }, h("span", { class: `dot ${status}` }), `${count(status)} ${label}`);
+  const shown = state.filter ? te.test_cases.filter((tc) => tc.status === state.filter) : te.test_cases;
+
+  main.replaceChildren(...[
+    h("div", { class: "te-head card" },
+      h("div", { class: "row between" },
+        h("h2", {}, te.url ? h("a", { href: te.url, target: "_blank" }, te.te_key) : te.te_key),
+        h("span", { class: "row" }, selectFor("environment", splitList(state.settings.environments)), selectFor("language", splitList(state.settings.languages)))),
+      te.summary ? h("p", { class: "muted te-summary" }, te.summary) : null,
+      te.xray === false ? h("p", { class: "warn small-text", title: te.xray_error || "" }, `Xray didn't list this execution's tests (${te.xray_error || "no details"}), so test cases came from its links.`) : null,
+      h("div", { class: "progress", title: `${count("pass")} of ${te.test_cases.length} passed` },
+        ["pass", "fail", "blocked", "executing"].map((st) => h("span", { class: st, style: `width:${(count(st) / total) * 100}%` }))),
+      h("div", { class: "chips" },
+        chip("pass", "passed"), chip("fail", "failed"), chip("blocked", "blocked"), chip("executing", "executing"), chip("pending", "pending")),
       h("div", { class: "row" },
         h("button", { class: "primary", onclick: () => busy("pot", exportPot) }, "Download PoT"),
         h("button", { onclick: () => busy("refresh", () => loadFromJira(te.te_key)) }, "Refresh from Jira"),
+        h("span", { class: "grow" }),
         h("button", {
-          class: "link danger", onclick: async () => {
+          class: "link danger", title: "Remove this execution and its screenshots from this browser", onclick: async () => {
             if (!confirm(`Remove ${te.te_key} and all its screenshots from this browser?`)) return;
             await store.deleteTe(te.te_key);
             state.te = null;
@@ -582,7 +598,8 @@ function render() {
         h("button", { class: "fail", onclick: () => busy("queue", submitQueue) }, "Create all in Jira"),
       ) : null,
     ),
-    h("div", { class: "tcs" }, te.test_cases.map(tcItem)),
+    state.filter && !shown.length ? h("p", { class: "muted empty" }, "No test cases with this status.") : null,
+    h("div", { class: "tcs" }, shown.map(tcItem)),
     h("form", {
       class: "row add-tc", onsubmit: async (e) => {
         e.preventDefault();
@@ -594,7 +611,7 @@ function render() {
         render();
       },
     }, addInput, h("button", {}, "Add")),
-  );
+  ].filter(Boolean));
 }
 
 // --- Events ----------------------------------------------------------------
