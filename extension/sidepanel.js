@@ -7,6 +7,8 @@ const $ = (id) => document.getElementById(id);
 const STATUSES = { pending: "Pending", pass: "Passed", fail: "Failed", blocked: "Blocked" };
 const CATEGORIES = { expected: "Expected", actual: "Actual" };
 const ISSUE_KEY = /^[A-Z][A-Z0-9_]*-\d+$/;
+const TO_XRAY = { pass: "PASS", fail: "FAIL", blocked: "BLOCKED", pending: "TODO" };
+const FROM_XRAY = { PASS: "pass", FAIL: "fail", BLOCKED: "blocked" };
 
 const state = {
   settings: null,
@@ -118,11 +120,15 @@ async function loadFromJira(teKey) {
   };
   const byKey = new Map(existing.test_cases.map((tc) => [tc.key, tc]));
   for (const tc of fetched.test_cases) {
-    const old = byKey.get(tc.key);
-    if (old) old.summary = tc.summary || old.summary;
-    else byKey.set(tc.key, { key: tc.key, summary: tc.summary, status: "pending" });
+    let item = byKey.get(tc.key);
+    if (!item) byKey.set(tc.key, (item = { key: tc.key, status: "pending" }));
+    item.summary = tc.summary || item.summary || "";
+    if (tc.run_id) item.run_id = tc.run_id;
+    // A result already recorded in Xray shows up here unless set locally
+    const xrayStatus = FROM_XRAY[tc.xray_status];
+    if (xrayStatus && item.status === "pending") item.status = xrayStatus;
   }
-  Object.assign(existing, { summary: fetched.summary, url: fetched.url, test_cases: [...byKey.values()] });
+  Object.assign(existing, { summary: fetched.summary, url: fetched.url, xray: fetched.xray, test_cases: [...byKey.values()] });
   await store.saveTe(existing);
   if (!fetched.test_cases.length) toast(`${fetched.te_key} has no linked test cases in Jira. Add them below.`, "error");
   else toast(`Loaded ${fetched.test_cases.length} test cases from ${fetched.te_key}.`);
@@ -177,22 +183,35 @@ async function setStatus(tcKey, status) {
   await saveTe();
   render();
 
-  const transition = { pass: state.settings.transition_pass, fail: state.settings.transition_fail }[status];
   const label = STATUSES[status].toLowerCase();
-  if (!ISSUE_KEY.test(tcKey) || (!transition && !state.settings.comment_evidence) || !["pass", "fail"].includes(status)) {
+  if (!ISSUE_KEY.test(tcKey)) {
     toast(`${tcKey} marked ${label}.`);
     return;
   }
+  const done = [];
   try {
-    if (transition) await jira().transition(tcKey, transition);
-    if (state.settings.comment_evidence) {
+    if (state.te.xray) {
+      // Xray executions: the result goes on the test run, not the Test issue's workflow
+      tc.run_id = await jira().setTestRunStatus(state.te.te_key, tcKey, TO_XRAY[status], tc.run_id);
+      await saveTe();
+      done.push(`Xray run set to ${TO_XRAY[status]}`);
+    } else {
+      const transition = { pass: state.settings.transition_pass, fail: state.settings.transition_fail }[status];
+      if (transition) {
+        await jira().transition(tcKey, transition);
+        done.push(`transitioned to ${transition}`);
+      }
+    }
+    if (state.settings.comment_evidence && ["pass", "fail"].includes(status)) {
       const evidence = state.shots.filter((s) => s.tc_key === tcKey && s.category === "actual");
       const text = [`Test ${label}${state.te.environment ? ` on ${state.te.environment}` : ""}.`, tc.note].filter(Boolean).join("\n");
       await jira().comment(tcKey, text, evidence.map((s) => ({ name: s.name, blob: s.blob })));
+      done.push("evidence commented");
     }
-    toast(`${tcKey} marked ${label} and updated in Jira.`);
+    toast(done.length ? `${tcKey} marked ${label}: ${done.join(", ")}.` : `${tcKey} marked ${label}.`);
   } catch (e) {
-    toast(`${tcKey} marked ${label} here, but Jira was not updated: ${e.message}`, "error");
+    const partial = done.length ? ` (${done.join(", ")})` : "";
+    toast(`${tcKey} marked ${label} here, but Jira was not fully updated${partial}: ${e.message}`, "error");
   }
 }
 

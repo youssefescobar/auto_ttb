@@ -16,11 +16,11 @@
       </label>
       <label>Transition on Pass
         <input name="transition_pass">
-        <small>Workflow transition (or target status) applied to the test case.</small>
+        <small>Xray executions set the test run to PASS / FAIL instead. This transition is only used for executions without Xray tests.</small>
       </label>
       <label>Transition on Fail
         <input name="transition_fail">
-        <small>Leave empty to only mark the test case failed here.</small>
+        <small>Only for executions without Xray tests. Leave empty to only mark the test case failed here.</small>
       </label>
       <label class="check"><input type="checkbox" name="comment_evidence">
         Also add a Jira comment with the Actual screenshots when passing or failing

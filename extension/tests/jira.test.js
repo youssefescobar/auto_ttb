@@ -60,7 +60,7 @@ test("test execution: Xray tests first, summaries looked up in one search", asyn
   const te = await jira.fetchTestExecution("qa-1");
   assert.equal(te.summary, "Sprint 5 run");
   assert.equal(te.url, "https://jira.example.com/browse/QA-1");
-  assert.deepEqual(te.test_cases, [{ key: "QA-9", summary: "Nine" }, { key: "QA-10", summary: "Ten" }]);
+  assert.deepEqual(te.test_cases.map(({ key, summary }) => ({ key, summary })), [{ key: "QA-9", summary: "Nine" }, { key: "QA-10", summary: "Ten" }]);
   assert.equal(calls.find((c) => c.path === "/rest/api/2/search").query.jql, "key in (QA-9,QA-10)");
 });
 
@@ -81,4 +81,30 @@ test("comment uploads screenshots and embeds them as thumbnails", async () => {
   await jira.comment("QA-2", "Passed", [{ name: "a.png", blob: new Blob(["x"]) }]);
   assert.ok(calls[0].init.body instanceof FormData);
   assert.equal(JSON.parse(calls[1].init.body).body, "Passed\n\n!a.png|thumbnail!");
+});
+
+test("Xray executions return test run ids and statuses", async () => {
+  const { jira } = fakeJira({
+    "GET /rest/api/2/issue/QA-1": () => [200, { fields: { summary: "" } }],
+    "GET /rest/raven/1.0/api/testexec/QA-1/test": () => [200, [{ id: 501, key: "QA-2", status: "TODO" }, { id: 502, key: "QA-3", status: "PASS" }]],
+    "GET /rest/api/2/search": () => [200, { issues: [] }],
+  });
+  const te = await jira.fetchTestExecution("QA-1");
+  assert.equal(te.xray, true);
+  assert.deepEqual(te.test_cases.map((t) => [t.key, t.run_id, t.xray_status]), [["QA-2", 501, "TODO"], ["QA-3", 502, "PASS"]]);
+});
+
+test("sets the Xray test run status, looking the run up when its id is unknown", async () => {
+  const { jira, calls } = fakeJira({
+    "GET /rest/raven/1.0/api/testrun": (u) => [200, u.searchParams.get("testIssueKey") === "QA-2" ? { id: 501 } : {}],
+    "PUT /rest/raven/1.0/api/testrun/501/status": () => [200, ""],
+  });
+  assert.equal(await jira.setTestRunStatus("QA-1", "QA-2", "PASS"), 501);
+  const put = calls.at(-1);
+  assert.equal(put.method, "PUT");
+  assert.equal(put.query.status, "PASS");
+  assert.equal(calls[0].query.testExecIssueKey, "QA-1");
+  await jira.setTestRunStatus("QA-1", "QA-2", "FAIL", 501);
+  assert.equal(calls.length, 3); // no lookup with a known id
+  await assert.rejects(jira.setTestRunStatus("QA-1", "QA-7", "PASS"), /no test run/);
 });
