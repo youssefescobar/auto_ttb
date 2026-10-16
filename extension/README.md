@@ -1,6 +1,6 @@
 # Auto TTB browser extension
 
-A Chrome/Edge side panel that replaces the local Python server. It runs inside your normal browser and uses the Jira tab you are already logged into, so there is no Python, no local server, no saved cookie file and no extra Chromium.
+A Chrome/Edge side panel (it replaced the old local Python server). It runs inside your normal browser and uses the Jira tab you are already logged into, so there is no Python, no local server, no saved cookie file and no extra Chromium.
 
 ## What it does
 
@@ -15,7 +15,7 @@ A Chrome/Edge side panel that replaces the local Python server. It runs inside y
 - **Download PoT** builds the Proof of Testing Word file in the browser, with the same layout as before.
 - Everything is stored in this browser profile (IndexedDB). Settings → Export backup saves it to a file.
 
-### Defects (step 2)
+### Defects
 
 - **Fail** opens a defect editor on the test case (or click **Report defect**). Write a short note and click **Draft with AI**: Gemini writes the title, scenario, steps, expected and actual from your note and the test case's screenshots (screenshots only if "Send screenshots to Gemini" is on). Edit anything before filing.
 - **Create in Jira** creates the defect with your project's fields (Settings → Defects), links it to the test case, attaches the screenshots, marks the Xray run FAIL and adds the defect to it.
@@ -48,7 +48,7 @@ It calls Jira Server/Data Center's REST API (`/rest/api/2/...`) with your browse
 ```bash
 cd extension
 npm install
-npm test          # Jira client and PoT document tests
+npm test          # unit tests
 npm run vendor    # rebuild lib/vendor/docx.mjs after changing the docx version
 ```
 

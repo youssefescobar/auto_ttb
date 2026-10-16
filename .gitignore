@@ -1,11 +1,5 @@
-/__py*
 .env
-/venv
 /executions
-db.json
 jira_session.json
 settings_overrides.json
-settings_history.json
-user_story.xlsx
-user_story_sample.json
-__pycache__/
+node_modules/
