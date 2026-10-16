@@ -1,6 +1,8 @@
 """
-Playwright driving Jira Server/DC UI.
-Logs in, saves session state to jira_session.json, and reuses it for headless actions.
+Jira Server/DC actions.
+With a Personal Access Token configured, transitions / TE lookups (and defect
+creation when auto-submit is on) go through the REST API (jira_rest.py).
+Otherwise Playwright drives the Jira UI using a session saved to jira_session.json.
 """
 import os
 import sys
@@ -9,6 +11,7 @@ import time
 from playwright.sync_api import sync_playwright
 
 import config
+import jira_rest
 
 _login_lock = threading.Lock()
 _save_requested_event = threading.Event()
@@ -48,20 +51,6 @@ def start_login_session():
                         with _login_lock:
                             _login_state["status"] = "saving"
                         context.storage_state(path=config.BROWSER_STATE_PATH)
-                        try:
-                            import json
-                            with open(config.BROWSER_STATE_PATH, 'r') as f:
-                                state_data = json.load(f)
-                            changed = False
-                            for cookie in state_data.get('cookies', []):
-                                if cookie.get('expires') == -1:
-                                    cookie['expires'] = time.time() + 31536000
-                                    changed = True
-                            if changed:
-                                with open(config.BROWSER_STATE_PATH, 'w') as f:
-                                    json.dump(state_data, f)
-                        except Exception as e:
-                            print(f"[!] Error modifying session cookies: {e}")
                         with _login_lock:
                             _login_state["status"] = "saved"
                             _login_state["message"] = "Session saved successfully!"
@@ -115,12 +104,21 @@ def get_login_status():
     with _login_lock:
         session_file = config.BROWSER_STATE_PATH
         has_file = os.path.exists(session_file)
-        return {
+        status = {
             "status": _login_state["status"],
             "message": _login_state["message"],
             "exists": has_file,
-            "mtime": os.path.getmtime(session_file) if has_file else None
+            "mtime": os.path.getmtime(session_file) if has_file else None,
+            "rest": False,
         }
+    if jira_rest.is_enabled():
+        try:
+            me = jira_rest.check_connection()
+            status["rest"] = True
+            status["rest_user"] = me.get("display_name") or me.get("name")
+        except Exception as e:
+            status["rest_error"] = str(e)
+    return status
 
 def login_and_save_session():
     """CLI wrapper: launches browser, waits for Enter in terminal, saves session."""
@@ -161,7 +159,10 @@ def _get_context(p):
 
 
 def transition_tc(tc_key: str, transition_name: str):
-    """Opens a TC issue and clicks the given workflow transition."""
+    """Transitions a TC: over REST when a Jira token is set, else by clicking in the UI."""
+    if jira_rest.is_enabled():
+        return jira_rest.transition_issue(tc_key, transition_name)
+
     with sync_playwright() as p:
         browser, context = _get_context(p)
         page = context.new_page()
@@ -484,6 +485,12 @@ def create_defect(
     if data is None:
         data = {}
 
+    # REST creates the issue directly, so only use it when the user opted out of
+    # reviewing the pre-filled form in Jira.
+    if jira_rest.is_enabled() and config.get("auto_submit_defect", False):
+        return jira_rest.create_defect(summary, description, screenshot_paths,
+                                       assignee=assignee, priority=priority, data=data)
+
     with sync_playwright() as p:
         browser, context = _get_context(p)
         page = context.new_page()
@@ -779,6 +786,9 @@ def add_comment_with_screenshots(issue_key: str, comment_text: str, screenshot_p
     Pre-fills a comment with screenshots attached on the given Jira defect issue.
     Does NOT auto-submit; leaves comment box open for user to review and click Save/Comment manually.
     """
+    if jira_rest.is_enabled() and config.get("auto_submit_defect", False):
+        return jira_rest.add_comment(issue_key, comment_text, screenshot_paths)
+
     valid_shots = [p for p in (screenshot_paths or []) if os.path.exists(p)]
 
     with sync_playwright() as p:
@@ -845,6 +855,15 @@ def fetch_te_from_jira(te_key: str) -> dict:
     # Handle full URLs: extract key from URL if needed
     if '/browse/' in te_key:
         te_key = te_key.split('/browse/')[-1].split('?')[0].split('#')[0].strip()
+
+    if jira_rest.is_enabled():
+        try:
+            result = jira_rest.fetch_test_execution(te_key)
+            if result:
+                return result
+            print("[*] No test cases found over REST; falling back to reading the page.")
+        except jira_rest.JiraRestError as e:
+            print(f"[!] REST lookup failed ({e}); falling back to reading the page.")
 
     import re
     url = f"{config.JIRA_BASE_URL}/browse/{te_key}"

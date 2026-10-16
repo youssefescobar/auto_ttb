@@ -45,6 +45,9 @@ def review_and_edit(summary, body):
 
 def check_session():
     """Ensure Jira session exists before running workflow."""
+    # With a token and auto-submit on, every Jira action goes over REST
+    if jira_actions.jira_rest.is_enabled() and config.get("auto_submit_defect", False):
+        return
     if not os.path.exists(config.BROWSER_STATE_PATH):
         print(f"\n[!] Jira session file '{config.BROWSER_STATE_PATH}' not found.")
         print("    Running initial Jira browser login sequence...\n")

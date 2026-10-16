@@ -11,6 +11,7 @@ import jira_actions
 import defect_draft
 import poc_doc
 import db
+import secret_store
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB upload limit
@@ -55,10 +56,18 @@ def api_settings():
     if request.method == 'GET':
         all_settings = config.get_all_settings()
         all_settings.pop('gemini_api_key', None)
+        all_settings.pop('jira_pat', None)
+        all_settings['jira_token_set'] = bool(secret_store.get_secret('jira_pat'))
         all_settings.pop('gemini_model', None)
         return jsonify(all_settings)
 
     data = request.json or {}
+    # Secrets go to the OS credential store, never to settings_overrides.json
+    for secret_key in secret_store.SECRETS:
+        if secret_key in data:
+            value = data.pop(secret_key)
+            if not secret_store.set_secret(secret_key, value):
+                return jsonify({"error": f"Cannot store {secret_key}: install 'keyring' or set it in .env"}), 400
     config.set_overrides(data)
     return jsonify({"status": "updated"})
 
@@ -883,4 +892,6 @@ def api_settings_history():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    # The Werkzeug debugger allows running code from the browser; only enable it explicitly.
+    debug = os.getenv("FLASK_DEBUG", "").lower() in ("1", "true")
+    app.run(host='127.0.0.1', port=5000, debug=debug)

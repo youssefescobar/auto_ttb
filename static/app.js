@@ -147,7 +147,7 @@ async function loadSettings() {
     const form = $('#settings-form');
     for (const [key, val] of Object.entries(state.settings)) {
       const el = form.elements[key];
-      if (el) {
+      if (el && el.type !== 'password') {
         if (el.type === 'checkbox') {
           el.checked = Boolean(val);
         } else {
@@ -155,6 +155,8 @@ async function loadSettings() {
         }
       }
     }
+    const tokenInput = form.elements['jira_pat'];
+    if (tokenInput) tokenInput.placeholder = state.settings.jira_token_set ? 'Token saved (type to replace)' : 'Paste a Jira Personal Access Token';
     updateFixedFieldsDisplay();
     await loadSettingsHistory();
   } catch (e) {
@@ -197,6 +199,7 @@ async function saveSettings() {
   for (const el of form.elements) {
     if (!el.name) continue;
     if (el.classList && el.classList.contains('history-dropdown')) continue;
+    if (el.type === 'password') continue; // secrets are sent separately below
     if (el.type === 'checkbox') {
       data[el.name] = el.checked;
     } else {
@@ -204,8 +207,15 @@ async function saveSettings() {
     }
   }
   
+  // Only send a secret when the user typed a new one; it never goes into history.
+  const secrets = {};
+  for (const el of form.elements) {
+    if (el.type === 'password' && el.name && el.value.trim()) secrets[el.name] = el.value.trim();
+  }
+
   try {
-    await api('POST', '/api/settings', data);
+    await api('POST', '/api/settings', { ...data, ...secrets });
+    for (const el of form.elements) { if (el.type === 'password') el.value = ''; }
     // Save values as history options for future quick switching
     const historyData = {};
     for (const [key, val] of Object.entries(data)) {
@@ -220,7 +230,7 @@ async function saveSettings() {
     toggleSettings(false);
     await loadSettingsHistory();
   } catch (e) {
-    showToast('Failed to save settings', 'error');
+    showToast(e.message || 'Failed to save settings', 'error');
   }
 }
 
@@ -236,6 +246,13 @@ async function checkSession() {
       if (dot) { dot.className = 'session-indicator warning'; dot.title = 'Browser open — log into Jira, then click Save Jira Session'; }
       if (loginBtn) hide(loginBtn);
       if (saveBtn) { show(saveBtn); saveBtn.textContent = '💾 Save Jira Session'; }
+      return;
+    }
+
+    if (res.rest) {
+      if (dot) { dot.className = 'session-indicator active'; dot.title = `Connected to Jira with token as ${res.rest_user || 'you'}`; }
+      if (loginBtn) { show(loginBtn); loginBtn.textContent = '✓ Jira (token)'; }
+      if (saveBtn) hide(saveBtn);
       return;
     }
 

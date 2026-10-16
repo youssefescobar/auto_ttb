@@ -71,7 +71,21 @@ The wizard will guide you through:
 1. **Jira Settings:** Base URL, Username, Project Key, Issue Type.
 2. **Gemini AI Settings:** Gemini API Key and Model (`gemini-2.5-flash`).
 3. **Test Execution & Defect Customization:** Default TE key and Defect Title pattern (e.g. `[{TE_KEY}][{TC_KEY}] {AI_TITLE}`).
-4. **Jira Browser Login:** Launches browser once for manual SSO/2FA login to save `jira_session.json`.
+4. **Jira Token / Browser Login:** Saves a Jira Personal Access Token to the OS credential store, or launches a browser once for manual SSO/2FA login to save `jira_session.json`.
+
+---
+
+## Jira Connection: Token (recommended) vs Browser
+
+**Token / REST API (recommended).** Create a Personal Access Token in Jira (*Profile → Personal Access Tokens*) and enter it in `python setup.py` or the web app's Settings. It is stored in the OS credential store (Windows Credential Manager / macOS Keychain) via `keyring`, never in a project file. With a token:
+
+- TC transitions and Test Execution lookups use the Jira REST API, no browser window.
+- Defects and comments are created over REST when **Auto-submit defect** is on. When it is off, the browser still opens the pre-filled Jira form so you can review it before clicking Create.
+- Set `JIRA_PROJECT` (e.g. `BDR`) if it can't be derived from the project name. If Jira uses an internal certificate authority, point `JIRA_CA_BUNDLE` at its CA file.
+
+**Browser (fallback).** Without a token, or with `JIRA_MODE=browser`, Playwright drives the Jira UI using the session saved in `jira_session.json`. Treat that file like a password: it contains your Jira login cookies.
+
+The web app's Flask debugger is off by default; set `FLASK_DEBUG=1` only while developing.
 
 ---
 
