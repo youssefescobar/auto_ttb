@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Auto TTB</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body class="panel">
+  <header>
+    <strong>Auto TTB</strong>
+    <span id="jira-status" class="pill">Jira…</span>
+    <button id="open-settings" class="icon" title="Settings">⚙</button>
+  </header>
+
+  <form id="load-form" class="row">
+    <input id="te-input" placeholder="Test execution key or Jira link" autocomplete="off">
+    <button type="submit" class="primary">Load</button>
+  </form>
+  <select id="te-select" hidden></select>
+
+  <main id="te"></main>
+  <div id="toast" role="status" hidden></div>
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>
