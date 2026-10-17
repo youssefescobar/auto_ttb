@@ -4,7 +4,7 @@ import * as store from "./lib/store.js";
 import { buildPotBlob } from "./lib/pot.js";
 import { draftDefect } from "./lib/ai.js";
 import { applyTitlePattern, buildDefectFields, metaFieldFor, optionsFor } from "./lib/defect.js";
-import { addStep, describeStep, playStep, recorderMain, recorderStop } from "./lib/recorder.js";
+import { addStep, describeStep, keyEventParams, playStep, recorderMain, recorderStop } from "./lib/recorder.js";
 
 const $ = (id) => document.getElementById(id);
 const STATUSES = { pending: "Pending", executing: "Executing", pass: "Passed", fail: "Failed", blocked: "Blocked" };
@@ -432,8 +432,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Recording and replaying need access to the site under test. Must be called
 // first thing in a click handler: Chrome only shows the prompt for a user gesture.
-function askForSites() {
-  return chrome.permissions.request(ALL_SITES).then((ok) => {
+function askForSites(replaying = false) {
+  const wanted = replaying && state.settings.real_input ? { ...ALL_SITES, permissions: ["debugger"] } : ALL_SITES;
+  return chrome.permissions.request(wanted).then((ok) => {
     if (!ok) throw new Error("Recording needs Chrome's permission to read and change the pages you test.");
   });
 }
@@ -499,15 +500,59 @@ async function waitForLoad(tabId, timeoutMs = 20000) {
   }
 }
 
+// Real input: Chrome's debugger protocol sends trusted mouse and key events, which
+// apps (and BrowserStack's device stream) treat exactly like a person's.
+function realInput(tabId) {
+  const target = { tabId };
+  const send = (method, params) => chrome.debugger.sendCommand(target, method, params);
+  return {
+    attach: () => chrome.debugger.attach(target, "1.3"),
+    detach: () => chrome.debugger.detach(target).catch(() => {}),
+    async click(x, y) {
+      await send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+      await send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", clickCount: 1 });
+      await send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", clickCount: 1 });
+    },
+    async key(step) {
+      for (const params of keyEventParams(step)) await send("Input.dispatchKeyEvent", params);
+    },
+    async type(text, typingMs) {
+      for (const ch of text) {
+        if (ch === "\n") await this.key({ key: "Enter" });
+        else {
+          await send("Input.dispatchKeyEvent", { type: "keyDown", key: ch, text: ch, unmodifiedText: ch });
+          await send("Input.dispatchKeyEvent", { type: "keyUp", key: ch });
+        }
+        if (typingMs) await sleep(typingMs);
+      }
+    },
+  };
+}
+
+const seconds = (v, fallback) => (v === "" || v === undefined || v === null || Number.isNaN(Number(v)) ? fallback : Number(v));
+
 async function replay(tc, granted) {
   await granted;
   const steps = tc.recording?.steps || [];
   const tab = await activeTab(false); // replay opens the start page itself
+  const pause = seconds(state.settings.replay_pause, 0.5);
+  const typingMs = seconds(state.settings.typing_ms, 60);
+  let real = null;
+  if (state.settings.real_input && (await chrome.permissions.contains({ permissions: ["debugger"] }))) {
+    real = realInput(tab.id);
+    try {
+      await real.attach();
+    } catch (e) {
+      real = null;
+      toast(`Real input isn't available (${e.message}); replaying with page events instead.`, "error");
+    }
+  }
   let shots = 0;
   try {
     for (const [i, step] of steps.entries()) {
       state.playing = { tcKey: tc.key, step: i };
       render();
+      if (i > 0) await sleep(seconds(step.wait, pause) * 1000);
       if (step.type === "open") {
         await chrome.tabs.update(tab.id, { url: step.url, active: true });
         await waitForLoad(tab.id);
@@ -515,17 +560,23 @@ async function replay(tc, granted) {
         await waitForLoad(tab.id);
       } else if (step.type === "shot") {
         await waitForLoad(tab.id);
-        await sleep(600); // let animations settle
+        await sleep(300); // let animations settle
         await addShots(tc.key, step.category || "actual", [await shootTab(tab)]);
         shots++;
       } else {
         await waitForLoad(tab.id);
-        const res = await inject(tab.id, playStep, [step, 8000]);
+        const viaPage = !real || (step.type === "input" && step.tag === "select");
+        const res = await inject(tab.id, playStep, [step, { timeoutMs: 8000, typingMs, locate: !viaPage }]);
         if (!res?.ok) throw new Error(`Replay stopped at step ${i + 1} (${describeStep(step)}): ${res?.why || "the page didn't respond"}.`);
-        await sleep(400);
+        if (!viaPage) {
+          if (step.type === "click") await real.click(res.x, res.y);
+          else if (step.type === "key") await real.key(step);
+          else await real.type(String(step.type === "input" ? step.value : step.text), typingMs);
+        }
       }
     }
   } finally {
+    await real?.detach();
     state.playing = null;
     render();
   }
@@ -538,7 +589,13 @@ function recorderSection(tc) {
   const playing = state.playing?.tcKey === tc.key;
   const otherBusy = (state.rec && !recording) || (state.playing && !playing);
   const list = steps.length ? h("ol", { class: "steps" }, steps.map((step, i) => h("li", { class: playing && state.playing.step === i ? "now" : null },
-    h("span", { class: "grow" }, describeStep(step)),
+    h("span", { class: "num" }, `${i + 1}.`),
+    h("span", { class: "grow", title: describeStep(step) }, describeStep(step)),
+    i === 0 ? null : h("input", {
+      class: "wait", type: "number", min: 0, step: 0.5, value: step.wait ?? "", placeholder: `${seconds(state.settings.replay_pause, 0.5)}s`,
+      title: "Seconds to wait before this step (blank: the default pause from Settings)",
+      onchange: async (e) => { const v = e.target.value.trim(); if (v === "") delete step.wait; else step.wait = Math.max(0, Number(v)); await saveTe(); },
+    }),
     recording || playing || i === 0 ? null : h("button", {
       class: "icon", title: "Remove step", onclick: async () => { steps.splice(i, 1); await saveTe(); render(); },
     }, "×")))) : null;
@@ -556,7 +613,7 @@ function recorderSection(tc) {
       h("strong", { class: "grow" }, "Recording", steps.length ? h("span", { class: "muted" }, ` ${steps.length} steps`) : null),
       steps.length > 1 ? h("button", {
         class: "small primary", disabled: otherBusy || playing,
-        onclick: () => { const granted = askForSites(); busy("replay", () => replay(tc, granted)); },
+        onclick: () => { const granted = askForSites(true); busy("replay", () => replay(tc, granted)); },
       }, playing ? "Replaying…" : "▶ Replay") : null,
       h("button", {
         class: "small", disabled: otherBusy || playing,

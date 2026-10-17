@@ -11,6 +11,11 @@ export const SECTIONS = [
     ["environments", "Environments (comma separated)", "SIT, UAT, PP, Prod", "text", ""],
     ["languages", "Languages (comma separated)", "English, Arabic", "text", ""],
   ]],
+  ["Record and replay", [
+    ["replay_pause", "Pause between steps (seconds)", "0.5", "text", "Each step can also have its own wait, set in its Steps list"],
+    ["typing_ms", "Typing speed (milliseconds per character)", "60", "text", ""],
+    ["real_input", "Replay with real mouse and keyboard input (needed for BrowserStack and many web apps; Chrome shows a \"started debugging\" bar while it runs)", true, "bool", ""],
+  ]],
   ["AI (Gemini)", [
     ["gemini_api_key", "Gemini API key", "", "secret", "Stored in this browser profile only. Saving asks Chrome for access to Google's Gemini API."],
     ["gemini_model", "Gemini model", "gemini-2.5-flash", "text", ""],

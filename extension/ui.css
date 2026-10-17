@@ -151,3 +151,8 @@ label > select { display: block; width: 100%; }
 .steps li .icon { font-size: 13px; padding: 0 4px; vertical-align: middle; }
 .steps li.now { font-weight: 600; color: var(--accent); }
 button:disabled { opacity: .5; cursor: default; }
+.steps li { display: flex; align-items: center; gap: 4px; }
+.steps li > span.grow { flex: 1; min-width: 0; }
+.steps input.wait { width: 58px; padding: 1px 4px; font-size: 11px; }
+.steps { list-style: none; padding-left: 0; }
+.steps .num { color: var(--muted); width: 20px; text-align: right; flex: none; }

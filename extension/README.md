@@ -26,11 +26,13 @@ A Chrome/Edge side panel (it replaced the old local Python server). It runs insi
 
 ### Record and replay (step 3)
 
-- In an open test case, click **● Record**, then click and type through the test in the current tab. Click **📷 Checkpoint** wherever you want a screenshot, then **Stop**.
-- **▶ Replay** opens the start page in the current tab, repeats your clicks and typing, and takes the checkpoint screenshots into Actual. If an element can't be found, replay stops and tells you at which step.
+- In an open test case, click **● Record**, then click and type through the test in the current tab. Keystrokes are recorded too: text you type, Enter, Tab, arrows, Escape and shortcuts like Ctrl+A, including keys typed outside a field (for example into a BrowserStack device). Click **📷 Checkpoint** wherever you want a screenshot, then **Stop**.
+- **▶ Replay** opens the start page in the current tab, repeats your clicks, types your text character by character and presses your keys, then takes the checkpoint screenshots into Actual. If an element can't be found, replay stops and tells you at which step.
+- **Delays:** open **Steps** and type a number of seconds next to any step to wait that long before it. Blank steps use the default pause from Settings → Record and replay, where you also set the typing speed.
+- **Real input** (on by default) replays with real mouse and keyboard events through Chrome's debugger, which BrowserStack and many web apps need. Chrome shows a "started debugging this browser" bar while a replay runs. Turn it off in Settings to replay with page events instead.
 - The first Record or Replay asks Chrome for access to the sites you test. That access also lets **Capture tab** work without clicking the toolbar icon first.
 - Steps are stored with the test case; open **Steps** to remove one. Passwords are stored but shown as dots.
-- Works best on normal web pages. On BrowserStack Live the device is a video stream, so replay can only click at recorded positions, which breaks if the layout shifts.
+- On BrowserStack Live the device is a video stream, so replay clicks at the recorded positions on it; that breaks if the device layout shifts between runs.
 
 ## Install (developer mode)
 
