@@ -156,3 +156,15 @@ button:disabled { opacity: .5; cursor: default; }
 .steps input.wait { width: 58px; padding: 1px 4px; font-size: 11px; }
 .steps { list-style: none; padding-left: 0; }
 .steps .num { color: var(--muted); width: 20px; text-align: right; flex: none; }
+.actions-box > summary { cursor: pointer; list-style: none; }
+.actions-box > summary::-webkit-details-marker { display: none; }
+.actions-box > summary::before { content: "▸ "; color: var(--muted); }
+.actions-box[open] > summary::before { content: "▾ "; }
+.actions-box form { margin: 8px 0; }
+.actions-box form input { width: auto; }
+.action-list { border-top: 1px solid var(--line); margin-top: 4px; }
+.action { border-bottom: 1px solid var(--line); padding: 4px 0; }
+.action:last-child { border-bottom: none; }
+.action-name { text-align: left; color: var(--fg); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.action-body { padding: 0 0 6px 14px; }
+.action-body label.check { font-size: 12px; margin: 6px 0; }

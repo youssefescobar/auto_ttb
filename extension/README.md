@@ -8,7 +8,6 @@ A Chrome/Edge side panel (it replaced the old local Python server). It runs insi
 - Per test case, collect **Expected** and **Actual** screenshots by:
   - pasting (Ctrl+V, e.g. from the Snipping Tool),
   - uploading,
-  - clicking **Capture tab**,
   - pressing **Alt+Shift+S**.
 - **Pass / Fail / Blocked / Executing** set the test run status in the Xray execution (PASS, FAIL, BLOCKED, EXECUTING; Reset sets TODO). Optionally Pass and Fail also add a Jira comment with the Actual screenshots.
 - Add a note and a linked defect key per test case.
@@ -24,15 +23,14 @@ A Chrome/Edge side panel (it replaced the old local Python server). It runs insi
 - **Check duplicates** lists open defects in the project with similar words; **Use this** links an existing one instead of filing a new one.
 - Settings → Defects shows dropdowns filled from your project's Defect create screen. The extension finds Jira's custom fields by name, so there are no field IDs to set.
 
-### Record and replay (step 3)
+### Actions: record and replay (step 3)
 
-- In an open test case, click **● Record**, then click and type through the test in the current tab. Keystrokes are recorded too: text you type, Enter, Tab, arrows, Escape and shortcuts like Ctrl+A, including keys typed outside a field (for example into a BrowserStack device). Click **📷 Checkpoint** wherever you want a screenshot, then **Stop**.
-- **▶ Replay** opens the start page in the current tab, repeats your clicks, types your text character by character and presses your keys, then takes the checkpoint screenshots into Actual. If an element can't be found, replay stops and tells you at which step.
-- **Delays:** open **Steps** and type a number of seconds next to any step to wait that long before it. Blank steps use the default pause from Settings → Record and replay, where you also set the typing speed.
-- **Real input** (on by default) replays with real mouse and keyboard events through Chrome's debugger, which BrowserStack and many web apps need. Chrome shows a "started debugging this browser" bar while a replay runs. Turn it off in Settings to replay with page events instead.
-- The first Record or Replay asks Chrome for access to the sites you test. That access also lets **Capture tab** work without clicking the toolbar icon first.
-- Steps are stored with the test case; open **Steps** to remove one. Passwords are stored but shown as dots.
-- On BrowserStack Live the device is a video stream, so replay clicks at the recorded positions on it; that breaks if the device layout shifts between runs.
+- Open **Actions** at the top of the panel, type a name (e.g. "Log in as AP user") and click **● Record**. Click and type through the page in the current tab. Keystrokes are recorded too: text, Enter, Tab, arrows, Escape and shortcuts like Ctrl+A, including keys typed outside a field (for example into a BrowserStack device). Click **📷 Checkpoint** wherever you want a screenshot, then **Stop**.
+- Actions aren't tied to a test execution. **▶ Run** opens the action's start page in the current tab (or, with "Run on the page that's open", starts where you are), repeats the clicks, types character by character and presses the keys. Checkpoint screenshots go into the open test case's Actual. If an element can't be found, the run stops and says at which step.
+- **Delays:** click an action's name to see its steps and type a number of seconds next to any step to wait that long before it. Blank steps use the default pause from Settings → Record and replay, where you also set the typing speed. The same list lets you remove steps, rename the action or delete it.
+- **Real input** (on by default) runs with real mouse and keyboard events through Chrome's debugger, which BrowserStack and many web apps need. Chrome shows a "started debugging this browser" bar while an action runs. Turn it off in Settings to use page events instead.
+- The first Record or Run asks Chrome for access to the sites you test. Passwords are stored in this browser profile but shown as dots.
+- On BrowserStack Live the device is a video stream, so runs click at the recorded positions on it; that breaks if the device layout shifts between runs.
 
 ## Install (developer mode)
 
@@ -42,11 +40,11 @@ A Chrome/Edge side panel (it replaced the old local Python server). It runs insi
 4. Click ⚙ and enter your Jira base URL, then Save. Chrome asks for access to that one site; allow it.
 5. If the status says "Log in to Jira", click it, log in as usual, and come back.
 
-If your laptop blocks Developer mode, IT can allow the extension with the `ExtensionInstallAllowlist` policy, or it can be published as an unlisted Chrome Web Store / Edge Add-ons item. The extension asks only for your Jira site. Screen capture uses Chrome's `activeTab`, so it gets no blanket access to other sites.
+If your laptop blocks Developer mode, IT can allow the extension with the `ExtensionInstallAllowlist` policy, or it can be published as an unlisted Chrome Web Store / Edge Add-ons item. Until you use Actions, the extension can only reach your Jira site; recording and running actions asks for access to the sites you test.
 
 ### Screen capture
 
-**Capture tab** works on a tab once you have clicked the Auto TTB toolbar icon while that tab was showing. **Alt+Shift+S** works on any tab; change the shortcut at `chrome://extensions/shortcuts`. Pasting always works.
+**Alt+Shift+S** captures the visible tab into the open test case; change the shortcut at `chrome://extensions/shortcuts`. Pasting always works.
 
 ## How it talks to Jira
 

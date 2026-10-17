@@ -25,8 +25,11 @@ const state = {
   meta: null, // Defect create screen from Jira, loaded on first use
   duplicates: {}, // tc key -> [{ key, summary, status }]
   filter: "", // status the test case list is narrowed to ("" = all)
-  rec: null, // { tabId, tcKey } while recording
-  playing: null, // { tcKey, step } while replaying
+  rec: null, // { tabId, actionId } while recording
+  playing: null, // { actionId, step } while an action runs
+  actions: [], // saved recordings
+  openAction: null, // id of the action whose steps are shown
+  actionsOpen: false, // Actions box expanded
 };
 
 // --- Small DOM helper ------------------------------------------------------
@@ -112,6 +115,18 @@ async function refreshTeList() {
 
 async function openTe(teKey) {
   state.te = await store.getTe(teKey);
+  // Recordings made on a test case (version 0.5) become named actions
+  const recorded = (state.te?.test_cases || []).filter((tc) => tc.recording);
+  for (const tc of recorded) {
+    if (tc.recording.steps?.length > 1) {
+      state.actions.push({ id: crypto.randomUUID(), name: `${tc.key} ${tc.summary || ""}`.trim().slice(0, 60), steps: tc.recording.steps, created_at: tc.recording.recorded_at });
+    }
+    delete tc.recording;
+  }
+  if (recorded.length) {
+    await saveActions();
+    await store.saveTe(state.te);
+  }
   state.shots = state.te ? await store.shotsForTe(teKey) : [];
   state.openTc = null;
   state.defectOpen = null;
@@ -168,18 +183,6 @@ async function addShots(tcKey, category, blobs) {
   }
   state.openTc = tcKey;
   render();
-}
-
-async function captureTab(tcKey, category) {
-  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  let dataUrl;
-  try {
-    dataUrl = await chrome.tabs.captureVisibleTab(tab?.windowId, { format: "png" });
-  } catch {
-    throw new Error("Chrome needs one click on the Auto TTB toolbar icon while that tab is showing (or allow site access once via Record), then Capture works there. Alt+Shift+S also captures, and pasting a Snipping Tool shot always works.");
-  }
-  await addShots(tcKey, category, [await (await fetch(dataUrl)).blob()]);
-  toast(`Captured into ${CATEGORIES[category]}.`);
 }
 
 async function deleteShot(id) {
@@ -458,38 +461,54 @@ async function inject(tabId, func, args = []) {
   return res?.result;
 }
 
-async function startRecording(tc, granted) {
+// Recordings are named actions, kept apart from test executions so any of them
+// can be run on any page. Stored as [{ id, name, steps, here, created_at }].
+
+async function saveActions() {
+  await chrome.storage.local.set({ actions: state.actions });
+}
+
+const actionById = (id) => state.actions.find((a) => a.id === id);
+
+async function startRecording(name, granted) {
   await granted;
   const tab = await activeTab();
   await inject(tab.id, recorderMain);
-  tc.recording = { steps: [{ type: "open", url: tab.url }], recorded_at: new Date().toISOString() };
-  state.rec = { tabId: tab.id, tcKey: tc.key };
-  await saveTe();
+  const action = { id: crypto.randomUUID(), name, steps: [{ type: "open", url: tab.url }], created_at: new Date().toISOString() };
+  state.actions.unshift(action);
+  state.rec = { tabId: tab.id, actionId: action.id };
+  state.openAction = action.id;
+  await saveActions();
   render();
-  toast("Recording. Click through the test in the page, add a checkpoint wherever you want a screenshot, then Stop.");
+  toast(`Recording "${name}". Click and type in the page, add checkpoints for screenshots, then Stop.`);
 }
 
 async function stopRecording() {
   const { tabId } = state.rec;
+  await inject(tabId, recorderStop).catch(() => {}); // the tab may be gone; flushes a field still being typed in
+  await sleep(200);
   state.rec = null;
-  await inject(tabId, recorderStop).catch(() => {}); // the tab may be gone
-  await saveTe();
+  await saveActions();
   render();
 }
 
 async function recordStep(step) {
-  const tc = tcByKey(state.rec.tcKey);
-  if (!tc?.recording) return;
-  addStep(tc.recording.steps, step);
-  await saveTe();
+  const action = actionById(state.rec?.actionId);
+  if (!action) return;
+  addStep(action.steps, step);
+  await saveActions();
   render();
 }
 
+// Screenshots from a checkpoint or a run go to the open test case, if there is one.
+const shotTarget = () => (state.te && state.openTc && tcByKey(state.openTc) ? state.openTc : null);
+
 async function checkpoint() {
-  const { tcKey, tabId } = state.rec;
   await recordStep({ type: "shot", category: "actual" });
-  await addShots(tcKey, "actual", [await shootTab(await chrome.tabs.get(tabId))]);
-  toast("Checkpoint added; screenshot taken into Actual.");
+  const tcKey = shotTarget();
+  if (!tcKey) return toast("Checkpoint added. Open a test case to keep the screenshots when the action runs.");
+  await addShots(tcKey, "actual", [await shootTab(await chrome.tabs.get(state.rec.tabId))]);
+  toast(`Checkpoint added; screenshot taken into ${tcKey} Actual.`);
 }
 
 async function waitForLoad(tabId, timeoutMs = 20000) {
@@ -530,10 +549,11 @@ function realInput(tabId) {
 
 const seconds = (v, fallback) => (v === "" || v === undefined || v === null || Number.isNaN(Number(v)) ? fallback : Number(v));
 
-async function replay(tc, granted) {
+async function runAction(action, granted) {
   await granted;
-  const steps = tc.recording?.steps || [];
-  const tab = await activeTab(false); // replay opens the start page itself
+  const steps = action.steps;
+  const tab = await activeTab(!!action.here);
+  const tcKey = shotTarget();
   const pause = seconds(state.settings.replay_pause, 0.5);
   const typingMs = seconds(state.settings.typing_ms, 60);
   let real = null;
@@ -543,30 +563,36 @@ async function replay(tc, granted) {
       await real.attach();
     } catch (e) {
       real = null;
-      toast(`Real input isn't available (${e.message}); replaying with page events instead.`, "error");
+      toast(`Real input isn't available (${e.message}); running with page events instead.`, "error");
     }
   }
   let shots = 0;
+  let skipped = 0;
   try {
     for (const [i, step] of steps.entries()) {
-      state.playing = { tcKey: tc.key, step: i };
+      state.playing = { actionId: action.id, step: i };
       render();
       if (i > 0) await sleep(seconds(step.wait, pause) * 1000);
       if (step.type === "open") {
+        if (action.here) continue; // run on whatever page is open
         await chrome.tabs.update(tab.id, { url: step.url, active: true });
         await waitForLoad(tab.id);
       } else if (step.type === "page") {
         await waitForLoad(tab.id);
       } else if (step.type === "shot") {
         await waitForLoad(tab.id);
+        if (!tcKey) {
+          skipped++;
+          continue;
+        }
         await sleep(300); // let animations settle
-        await addShots(tc.key, step.category || "actual", [await shootTab(tab)]);
+        await addShots(tcKey, step.category || "actual", [await shootTab(tab)]);
         shots++;
       } else {
         await waitForLoad(tab.id);
         const viaPage = !real || (step.type === "input" && step.tag === "select");
         const res = await inject(tab.id, playStep, [step, { timeoutMs: 8000, typingMs, locate: !viaPage }]);
-        if (!res?.ok) throw new Error(`Replay stopped at step ${i + 1} (${describeStep(step)}): ${res?.why || "the page didn't respond"}.`);
+        if (!res?.ok) throw new Error(`"${action.name}" stopped at step ${i + 1} (${describeStep(step)}): ${res?.why || "the page didn't respond"}.`);
         if (!viaPage) {
           if (step.type === "click") await real.click(res.x, res.y);
           else if (step.type === "key") await real.key(step);
@@ -579,51 +605,93 @@ async function replay(tc, granted) {
     state.playing = null;
     render();
   }
-  toast(`Replayed ${steps.length} steps${shots ? ` and took ${shots} screenshot${shots > 1 ? "s" : ""} into Actual` : ""}.`);
+  const plural = (n) => `${n} screenshot${n > 1 ? "s" : ""}`;
+  toast(`Ran "${action.name}"${shots ? `, ${plural(shots)} into ${tcKey} Actual` : ""}${skipped ? `; ${plural(skipped)} skipped, open a test case to keep them` : ""}.`);
 }
 
-function recorderSection(tc) {
-  const steps = tc.recording?.steps || [];
-  const recording = state.rec?.tcKey === tc.key;
-  const playing = state.playing?.tcKey === tc.key;
-  const otherBusy = (state.rec && !recording) || (state.playing && !playing);
-  const list = steps.length ? h("ol", { class: "steps" }, steps.map((step, i) => h("li", { class: playing && state.playing.step === i ? "now" : null },
+function stepList(action) {
+  const playing = state.playing?.actionId === action.id;
+  const recording = state.rec?.actionId === action.id;
+  return h("ol", { class: "steps" }, action.steps.map((step, i) => h("li", { class: playing && state.playing.step === i ? "now" : null },
     h("span", { class: "num" }, `${i + 1}.`),
     h("span", { class: "grow", title: describeStep(step) }, describeStep(step)),
     i === 0 ? null : h("input", {
       class: "wait", type: "number", min: 0, step: 0.5, value: step.wait ?? "", placeholder: `${seconds(state.settings.replay_pause, 0.5)}s`,
       title: "Seconds to wait before this step (blank: the default pause from Settings)",
-      onchange: async (e) => { const v = e.target.value.trim(); if (v === "") delete step.wait; else step.wait = Math.max(0, Number(v)); await saveTe(); },
+      onchange: async (e) => { const v = e.target.value.trim(); if (v === "") delete step.wait; else step.wait = Math.max(0, Number(v)); await saveActions(); },
     }),
     recording || playing || i === 0 ? null : h("button", {
-      class: "icon", title: "Remove step", onclick: async () => { steps.splice(i, 1); await saveTe(); render(); },
-    }, "×")))) : null;
+      class: "icon", title: "Remove step", onclick: async () => { action.steps.splice(i, 1); await saveActions(); render(); },
+    }, "×"))));
+}
 
-  if (recording) {
-    return h("section", { class: "recorder recording" },
+function actionItem(action) {
+  const open = state.openAction === action.id;
+  const playing = state.playing?.actionId === action.id;
+  const busyElsewhere = !!(state.rec || state.playing);
+  return h("div", { class: `action${open ? " open" : ""}` },
+    h("div", { class: "row" },
+      h("button", { class: "link grow action-name", title: "Show steps", onclick: () => { state.openAction = open ? null : action.id; render(); } },
+        `${open ? "▾" : "▸"} ${action.name}`, h("span", { class: "muted" }, ` · ${action.steps.length} steps`)),
+      h("button", {
+        class: "small primary", disabled: busyElsewhere,
+        onclick: () => { const granted = askForSites(); busy("run", () => runAction(action, granted)); },
+      }, playing ? "Running…" : "▶ Run")),
+    open ? h("div", { class: "action-body" },
+      stepList(action),
+      h("label", { class: "check" },
+        h("input", { type: "checkbox", checked: !!action.here, onchange: async (e) => { action.here = e.target.checked; await saveActions(); } }),
+        "Run on the page that's open (don't go to the start page first)"),
       h("div", { class: "row" },
-        h("strong", { class: "grow" }, h("span", { class: "rec-dot" }), ` Recording · ${steps.length} steps`),
+        h("button", {
+          class: "link", onclick: async () => {
+            const name = prompt("Action name", action.name)?.trim();
+            if (!name) return;
+            action.name = name;
+            await saveActions();
+            render();
+          },
+        }, "Rename"),
+        h("span", { class: "grow" }),
+        h("button", {
+          class: "link danger", disabled: busyElsewhere, onclick: async () => {
+            if (!confirm(`Delete the action "${action.name}"?`)) return;
+            state.actions = state.actions.filter((a) => a.id !== action.id);
+            await saveActions();
+            render();
+          },
+        }, "Delete")),
+    ) : null,
+  );
+}
+
+function renderActions() {
+  const box = $("actions");
+  const recording = state.rec && actionById(state.rec.actionId);
+  if (recording) {
+    box.replaceChildren(h("section", { class: "recorder recording" },
+      h("div", { class: "row" },
+        h("strong", { class: "grow" }, h("span", { class: "rec-dot" }), ` Recording "${recording.name}" · ${recording.steps.length} steps`),
         h("button", { class: "small", onclick: () => busy("checkpoint", checkpoint) }, "📷 Checkpoint"),
         h("button", { class: "small primary", onclick: () => busy("stop", stopRecording) }, "Stop")),
-      list);
+      stepList(recording)));
+    return;
   }
-  return h("section", { class: "recorder" },
-    h("div", { class: "row" },
-      h("strong", { class: "grow" }, "Recording", steps.length ? h("span", { class: "muted" }, ` ${steps.length} steps`) : null),
-      steps.length > 1 ? h("button", {
-        class: "small primary", disabled: otherBusy || playing,
-        onclick: () => { const granted = askForSites(); busy("replay", () => replay(tc, granted)); },
-      }, playing ? "Replaying…" : "▶ Replay") : null,
-      h("button", {
-        class: "small", disabled: otherBusy || playing,
-        onclick: () => {
-          if (steps.length > 1 && !confirm("Record again? This replaces the current steps.")) return;
-          const granted = askForSites();
-          busy("record", () => startRecording(tc, granted));
-        },
-      }, steps.length ? "Record again" : "● Record")),
-    steps.length ? h("details", { class: "steps-box", open: playing }, h("summary", { class: "muted" }, "Steps"), list)
-      : h("small", { class: "muted" }, "Records your clicks and typing in the current tab. Replay repeats them and takes the screenshots for you."));
+  const name = h("input", { placeholder: "New action name, e.g. Log in as AP user", class: "grow" });
+  const record = (e) => {
+    e.preventDefault();
+    const n = name.value.trim();
+    if (!n) return toast("Give the action a name first.", "error");
+    const granted = askForSites();
+    busy("record", () => startRecording(n, granted));
+  };
+  box.replaceChildren(h("details", { class: "recorder actions-box", open: state.actionsOpen },
+    h("summary", { onclick: (e) => { e.preventDefault(); state.actionsOpen = !state.actionsOpen; render(); } },
+      h("strong", {}, "Actions"), h("span", { class: "muted" }, ` ${state.actions.length || ""}`)),
+    h("form", { class: "row", onsubmit: record }, name, h("button", { class: "small", disabled: !!state.playing }, "● Record")),
+    state.actions.length ? h("div", { class: "action-list" }, state.actions.map(actionItem))
+      : h("small", { class: "muted" }, "Record clicks and typing once, then run them on any page. Checkpoint screenshots go to the open test case."),
+  ));
 }
 
 // --- PoT export ------------------------------------------------------------
@@ -674,7 +742,6 @@ function shotSection(tc, category) {
     h("div", { class: "row between" },
       h("strong", {}, CATEGORIES[category], h("span", { class: "muted" }, ` ${shots.length}`)),
       h("span", { class: "row" },
-        h("button", { class: "small", onclick: () => busy("capture", () => captureTab(tc.key, category)) }, "Capture tab"),
         h("button", { class: "small", onclick: () => fileInput.click() }, "Upload"),
         fileInput,
       ),
@@ -710,7 +777,6 @@ function tcItem(tc) {
       statusButton("pass", "Pass"), statusButton("fail", "Fail"), statusButton("blocked", "Blocked"), statusButton("executing", "Executing")),
     shotSection(tc, "expected"),
     shotSection(tc, "actual"),
-    recorderSection(tc),
     h("label", {}, "Note",
       h("textarea", { rows: 2, value: tc.note || "", onchange: async (e) => { tc.note = e.target.value.trim(); await saveTe(); } })),
     h("label", {}, "Linked defect",
@@ -749,6 +815,7 @@ function selectFor(field, options) {
 function render() {
   state.urls.forEach(URL.revokeObjectURL);
   state.urls = [];
+  renderActions();
   const main = $("te");
   const te = state.te;
   if (!te) {
@@ -872,7 +939,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   if (state.rec?.tabId === tabId) {
     state.rec = null;
-    saveTe().then(render);
+    saveActions().then(render);
     toast("The recorded tab was closed, so recording stopped.");
   }
 });
@@ -890,6 +957,7 @@ window.addEventListener("focus", () => state.settings && checkJira());
 async function init() {
   $("app-name").title = `Version ${chrome.runtime.getManifest().version}`;
   state.settings = await getSettings();
+  state.actions = (await chrome.storage.local.get("actions")).actions || [];
   checkJira();
   await refreshTeList();
   const { lastTe } = await chrome.storage.local.get("lastTe");
