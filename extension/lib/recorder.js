@@ -5,8 +5,8 @@
 // Steps (any step may carry `wait`: seconds to pause before it runs):
 //   { type: "open", url }                       first step: the page recording started on
 //   { type: "click", sel, text, tag, ox, oy }    ox/oy: click position inside the element (0..1)
-//   { type: "input", sel, tag, value, secret }   what was typed into a field (or chosen in a select)
-//   { type: "text", sel, text }                  keys typed outside a field, e.g. into a BrowserStack stream
+//   { type: "text", sel, text, secret }          characters typed (into a field, or e.g. a BrowserStack stream)
+//   { type: "input", sel, tag, value, secret }   a value set without typing: a select, autofill, a picker
 //   { type: "key", sel, key, ctrl, shift, alt, meta }   Enter, Tab, arrows, Escape, shortcuts…
 //   { type: "page", url }                        a page load caused by the previous step
 //   { type: "shot", category: "actual" }         take a screenshot here
@@ -20,15 +20,17 @@ export function recorderMain() {
 
   const esc = (v) => CSS.escape(v);
   const generated = (v) => /\d{3,}|[a-f0-9]{8,}|^(ember|ext|react|rc|mui|ng)[-_]?/i.test(v);
-  function unique(sel) {
-    try {
-      return document.querySelectorAll(sel).length === 1;
-    } catch {
-      return false;
-    }
-  }
+  // Selectors are unique within the element's own document or shadow root
   function selectorFor(el) {
     if (!el || el === document || el === document.body || el === document.documentElement) return "body";
+    const root = el.getRootNode?.() || document;
+    const unique = (sel) => {
+      try {
+        return root.querySelectorAll(sel).length === 1;
+      } catch {
+        return false;
+      }
+    };
     for (const attr of ["data-testid", "data-test", "data-qa", "data-cy", "name", "aria-label", "placeholder"]) {
       const v = el.getAttribute?.(attr);
       if (v) {
@@ -50,24 +52,18 @@ export function recorderMain() {
     }
     return parts.join(" > ");
   }
+  // The element under the event, looking inside shadow DOM (e.target stops at the host)
+  const origin = (e) => e.composedPath?.()[0] || e.target;
   // The element a person meant: the nearest button/link/field rather than an icon inside it
   const target = (el) => el.closest?.("a, button, input, select, textarea, label, [role=button], [role=link], [role=tab], [role=option], [role=menuitem], [onclick]") || el;
   const textOf = (el) => (el.innerText || el.value || el.getAttribute?.("aria-label") || "").trim().replace(/\s+/g, " ").slice(0, 60);
-  const isField = (el) => !!el?.matches?.("input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]), textarea, select, [contenteditable=true], [contenteditable='']");
-  const valueOf = (el) => (el.isContentEditable ? el.innerText : el.value);
-  const sent = new WeakMap(); // field -> last value recorded, so blur doesn't record it twice
-
-  function recordValue(el) {
-    const value = valueOf(el);
-    if (sent.get(el) === value) return;
-    sent.set(el, value);
-    send({ type: "input", sel: selectorFor(el), tag: el.tagName.toLowerCase(), value, secret: el.type === "password" });
-  }
+  const isField = (el) => !!el?.matches?.("input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]), textarea, [contenteditable=true], [contenteditable='']") || !!el?.isContentEditable;
+  const keyed = new WeakSet(); // fields typed into with the keyboard since they got focus
 
   const onClick = (e) => {
     if (!e.isTrusted) return;
-    const el = target(e.target);
-    if (isField(el) && el.tagName !== "SELECT") return; // focusing a field; what's typed is recorded separately
+    const el = target(origin(e));
+    if (isField(el)) return; // focusing a field; what's typed is recorded as keystrokes
     const r = el.getBoundingClientRect();
     send({
       type: "click", sel: selectorFor(el), text: textOf(el), tag: el.tagName.toLowerCase(),
@@ -75,37 +71,43 @@ export function recorderMain() {
       oy: r.height ? +((e.clientY - r.top) / r.height).toFixed(3) : 0.5,
     });
   };
-  const onChange = (e) => { // not only trusted events: some pickers set the value from script
-    if (isField(e.target)) recordValue(e.target);
+  // Selects, and fields filled without typing (autofill, pickers), are recorded as their value
+  const onChange = (e) => {
+    const el = origin(e);
+    if (el.tagName === "SELECT") send({ type: "input", sel: selectorFor(el), tag: "select", value: el.value });
+    else if (isField(el) && !keyed.has(el)) {
+      send({ type: "input", sel: selectorFor(el), tag: el.tagName.toLowerCase(), value: el.isContentEditable ? el.innerText : el.value, secret: el.type === "password" });
+    }
+  };
+  const onFocus = (e) => keyed.delete(origin(e));
+  const onPaste = (e) => {
+    const el = origin(e);
+    const text = e.clipboardData?.getData("text") || "";
+    if (!text) return;
+    if (isField(el)) keyed.add(el);
+    send({ type: "text", sel: selectorFor(el), text, secret: el.type === "password" });
   };
   // Keys that do something besides typing a character
-  const SPECIAL = new Set(["Enter", "Tab", "Escape", "Backspace", "Delete", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", " "]);
+  const SPECIAL = new Set(["Enter", "Tab", "Escape", "Backspace", "Delete", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"]);
   const onKey = (e) => {
-    if (!e.isTrusted || ["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(e.key)) return;
-    const el = e.target;
+    if (!e.isTrusted || e.isComposing || ["Shift", "Control", "Alt", "Meta", "CapsLock", "Dead", "Process", "Unidentified"].includes(e.key)) return;
+    const el = origin(e);
     const combo = e.ctrlKey || e.metaKey || e.altKey;
-    const field = isField(el) && el.tagName !== "SELECT";
-    if (field) {
-      // Plain typing and editing inside a field is recorded as its value
-      if (!combo && (e.key.length === 1 || e.key === "Backspace" || e.key === "Delete")) return;
-      if (e.key === "Tab" || e.key === "Enter") recordValue(el); // these can leave or submit before change fires
-      if (!combo && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return; // caret moves
-    } else if (!combo && e.key.length === 1 && e.key !== " ") {
-      send({ type: "text", sel: selectorFor(el), text: e.key });
+    if (isField(el)) keyed.add(el);
+    const sel = selectorFor(el);
+    if (!combo && e.key.length === 1) {
+      send({ type: "text", sel, text: e.key, secret: el.type === "password" });
       return;
     }
-    if (!combo && !SPECIAL.has(e.key) && e.key.length > 1 && !/^F\d+$/.test(e.key)) return;
-    send({ type: "key", sel: selectorFor(el), key: e.key, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey });
+    if (!combo && !SPECIAL.has(e.key) && !/^F\d+$/.test(e.key)) return;
+    if (combo && (e.key === "v" || e.key === "V") && isField(el)) return; // recorded by the paste handler
+    send({ type: "key", sel, key: e.key, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey });
   };
-  document.addEventListener("click", onClick, true);
-  document.addEventListener("change", onChange, true);
-  document.addEventListener("keydown", onKey, true);
+  const listeners = [["click", onClick], ["change", onChange], ["keydown", onKey], ["focusin", onFocus], ["paste", onPaste]];
+  for (const [type, fn] of listeners) document.addEventListener(type, fn, true);
   window.__autoTtbRec = {
     stop() {
-      if (isField(document.activeElement)) recordValue(document.activeElement); // typed but never left the field
-      document.removeEventListener("click", onClick, true);
-      document.removeEventListener("change", onChange, true);
-      document.removeEventListener("keydown", onKey, true);
+      for (const [type, fn] of listeners) document.removeEventListener(type, fn, true);
       delete window.__autoTtbRec;
     },
   };
@@ -128,11 +130,16 @@ export async function playStep(step, opts) {
   const norm = (s) => (s || "").trim().replace(/\s+/g, " ").toLowerCase();
   function find() {
     if (!step.sel || step.sel === "body") return document.activeElement && document.activeElement !== document.body ? document.activeElement : document.body;
-    let el = null;
-    try {
-      el = document.querySelector(step.sel);
-    } catch {}
-    if (el && visible(el)) return el;
+    // Search the page and any shadow roots in it
+    const roots = [document];
+    for (let i = 0; i < roots.length; i++) for (const x of roots[i].querySelectorAll("*")) if (x.shadowRoot) roots.push(x.shadowRoot);
+    for (const root of roots) {
+      let el = null;
+      try {
+        el = root.querySelector(step.sel);
+      } catch {}
+      if (el && visible(el)) return el;
+    }
     // Layout changed: look for the same kind of element with the same text
     if (step.text && step.type === "click") {
       const want = norm(step.text);
@@ -144,6 +151,14 @@ export async function playStep(step, opts) {
   let el = null;
   for (const end = Date.now() + timeoutMs; !(el = find()) && Date.now() < end;) await sleep(200);
   if (!el) return { ok: false, why: `couldn't find ${step.text && step.type === "click" ? `"${step.text}"` : step.sel}` };
+  const field = el.isContentEditable || (el.tagName !== "SELECT" && "value" in el);
+  const wasFocused = document.activeElement === el || el.shadowRoot?.activeElement;
+  // Typing into a field that wasn't focused starts at its end, as after a click
+  const caretToEnd = () => {
+    try {
+      if (!wasFocused && el.setSelectionRange) el.setSelectionRange(el.value.length, el.value.length);
+    } catch {}
+  };
   if (el !== document.body) el.scrollIntoView({ block: "center", inline: "center" });
   await sleep(50);
 
@@ -162,13 +177,22 @@ export async function playStep(step, opts) {
   };
 
   if (locate) {
+    // Count keys the page receives, so the panel can tell if the debugger's typing arrived
+    if (!window.__autoTtbKeys) {
+      window.__autoTtbKeys = { count: 0 };
+      document.addEventListener("keydown", () => window.__autoTtbKeys.count++, true);
+    }
+    window.__autoTtbKeys.count = 0;
     // Real input types into a focused, empty field
     if (step.type === "input" && isText(el)) {
       el.focus();
       setValue(el, "");
       el.dispatchEvent(new Event("input", { bubbles: true }));
-    } else if (step.type !== "click" && el !== document.body) el.focus?.();
-    return { ok: true, ...point() };
+    } else if (step.type !== "click" && el !== document.body) {
+      el.focus?.();
+      if (step.type === "text") caretToEnd();
+    }
+    return { ok: true, field, ...point() };
   }
 
   if (step.type === "click") {
@@ -183,6 +207,7 @@ export async function playStep(step, opts) {
   } else if (step.type === "input" || step.type === "text") {
     const value = String(step.type === "input" ? step.value : step.text);
     el.focus?.();
+    if (step.type === "text") caretToEnd();
     if (step.type === "input" && !isText(el)) setValue(el, value); // a select: just choose
     else {
       if (step.type === "input") setValue(el, "");
@@ -190,7 +215,12 @@ export async function playStep(step, opts) {
         const k = { key: ch, bubbles: true, cancelable: true };
         el.dispatchEvent(new KeyboardEvent("keydown", k));
         el.dispatchEvent(new KeyboardEvent("keypress", k));
-        if (isText(el)) {
+        if (isText(el) && !el.isContentEditable && "selectionStart" in el && el.selectionStart !== null) {
+          const { selectionStart: a, selectionEnd: b, value: v } = el;
+          setValue(el, v.slice(0, a) + ch + v.slice(b));
+          el.setSelectionRange(a + 1, a + 1);
+          el.dispatchEvent(new InputEvent("input", { bubbles: true, data: ch, inputType: "insertText" }));
+        } else if (isText(el)) {
           setValue(el, (el.isContentEditable ? el.innerText : el.value) + ch);
           el.dispatchEvent(new InputEvent("input", { bubbles: true, data: ch, inputType: "insertText" }));
         }
@@ -198,7 +228,7 @@ export async function playStep(step, opts) {
         if (typingMs) await sleep(typingMs);
       }
     }
-    el.dispatchEvent(new Event("input", { bubbles: true }));
+    if (step.type === "input") el.dispatchEvent(new Event("input", { bubbles: true }));
     el.dispatchEvent(new Event("change", { bubbles: true }));
   } else if (step.type === "key") {
     const k = { key: step.key, code: step.key, bubbles: true, cancelable: true, ctrlKey: !!step.ctrl, shiftKey: !!step.shift, altKey: !!step.alt, metaKey: !!step.meta };
@@ -206,8 +236,25 @@ export async function playStep(step, opts) {
     el.dispatchEvent(new KeyboardEvent("keyup", k));
     // A synthetic key does nothing by itself; do what the browser would for the common ones
     if (notHandled && step.key === "Enter" && el.form) el.form.requestSubmit();
+    if (notHandled && !step.ctrl && !step.meta && !step.alt && "selectionStart" in el && typeof el.value === "string") {
+      let { selectionStart: a, selectionEnd: b, value: v } = el;
+      if (step.key === "Backspace" || step.key === "Delete") {
+        if (a === b) step.key === "Backspace" ? (a = Math.max(0, a - 1)) : (b = Math.min(v.length, b + 1));
+        setValue(el, v.slice(0, a) + v.slice(b));
+        el.setSelectionRange(a, a);
+        el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: step.key === "Backspace" ? "deleteContentBackward" : "deleteContentForward" }));
+      } else if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(step.key)) {
+        const p = { ArrowLeft: Math.max(0, a - 1), ArrowRight: Math.min(v.length, b + 1), Home: 0, End: v.length }[step.key];
+        el.setSelectionRange(p, p);
+      }
+    }
   }
   return { ok: true };
+}
+
+// How many keys reached the page since playStep located a field (injected).
+export function keysSeen() {
+  return window.__autoTtbKeys?.count ?? -1;
 }
 
 // --- Real input through Chrome's debugger protocol -----------------------
@@ -250,7 +297,7 @@ export function describeStep(step) {
     case "open": return `Open ${step.url}`;
     case "click": return `Click ${step.text ? `"${step.text}"` : step.tag || "element"}`;
     case "input": return `${step.tag === "select" ? "Choose" : "Type"} ${step.secret ? "••••••" : `"${String(step.value).slice(0, 40)}"`}`;
-    case "text": return `Type "${step.text.slice(0, 40)}"`;
+    case "text": return `Type ${step.secret ? "••••••" : `"${step.text.slice(0, 40)}"`}`;
     case "key": return `Press ${[step.ctrl && "Ctrl", step.alt && "Alt", step.shift && "Shift", step.meta && "Cmd", step.key === " " ? "Space" : step.key].filter(Boolean).join("+")}`;
     case "page": return `Page loads: ${step.url.replace(/^https?:\/\//, "").slice(0, 50)}`;
     case "shot": return "📷 Screenshot";

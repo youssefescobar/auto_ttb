@@ -32,3 +32,7 @@ test("real key events", () => {
   assert.deepEqual(keyEventParams({ key: "a", ctrl: true })[0], { type: "rawKeyDown", key: "a", windowsVirtualKeyCode: 65, modifiers: 2 });
   assert.equal(keyEventParams({ key: "ArrowDown" })[0].windowsVirtualKeyCode, 40);
 });
+
+test("masks typed passwords", () => {
+  assert.equal(describeStep({ type: "text", text: "s3cret", secret: true }), "Type ••••••");
+});

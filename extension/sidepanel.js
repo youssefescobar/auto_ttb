@@ -4,7 +4,7 @@ import * as store from "./lib/store.js";
 import { buildPotBlob } from "./lib/pot.js";
 import { draftDefect } from "./lib/ai.js";
 import { applyTitlePattern, buildDefectFields, metaFieldFor, optionsFor } from "./lib/defect.js";
-import { addStep, describeStep, keyEventParams, playStep, recorderMain, recorderStop } from "./lib/recorder.js";
+import { addStep, describeStep, keyEventParams, keysSeen, playStep, recorderMain, recorderStop } from "./lib/recorder.js";
 
 const $ = (id) => document.getElementById(id);
 const STATUSES = { pending: "Pending", executing: "Executing", pass: "Passed", fail: "Failed", blocked: "Blocked" };
@@ -596,7 +596,13 @@ async function runAction(action, granted) {
         if (!viaPage) {
           if (step.type === "click") await real.click(res.x, res.y);
           else if (step.type === "key") await real.key(step);
-          else await real.type(String(step.type === "input" ? step.value : step.text), typingMs);
+          else {
+            await real.type(String(step.type === "input" ? step.value : step.text), typingMs);
+            // Some fields ignore the debugger's keys; if nothing changed, type with page events
+            if (res.field && (await inject(tab.id, keysSeen)) === 0) {
+              await inject(tab.id, playStep, [step, { timeoutMs: 2000, typingMs }]);
+            }
+          }
         }
       }
     }
