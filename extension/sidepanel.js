@@ -432,9 +432,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Recording and replaying need access to the site under test. Must be called
 // first thing in a click handler: Chrome only shows the prompt for a user gesture.
-function askForSites(replaying = false) {
-  const wanted = replaying && state.settings.real_input ? { ...ALL_SITES, permissions: ["debugger"] } : ALL_SITES;
-  return chrome.permissions.request(wanted).then((ok) => {
+function askForSites() {
+  return chrome.permissions.request(ALL_SITES).then((ok) => {
     if (!ok) throw new Error("Recording needs Chrome's permission to read and change the pages you test.");
   });
 }
@@ -538,7 +537,7 @@ async function replay(tc, granted) {
   const pause = seconds(state.settings.replay_pause, 0.5);
   const typingMs = seconds(state.settings.typing_ms, 60);
   let real = null;
-  if (state.settings.real_input && (await chrome.permissions.contains({ permissions: ["debugger"] }))) {
+  if (state.settings.real_input) {
     real = realInput(tab.id);
     try {
       await real.attach();
@@ -613,7 +612,7 @@ function recorderSection(tc) {
       h("strong", { class: "grow" }, "Recording", steps.length ? h("span", { class: "muted" }, ` ${steps.length} steps`) : null),
       steps.length > 1 ? h("button", {
         class: "small primary", disabled: otherBusy || playing,
-        onclick: () => { const granted = askForSites(true); busy("replay", () => replay(tc, granted)); },
+        onclick: () => { const granted = askForSites(); busy("replay", () => replay(tc, granted)); },
       }, playing ? "Replaying…" : "▶ Replay") : null,
       h("button", {
         class: "small", disabled: otherBusy || playing,

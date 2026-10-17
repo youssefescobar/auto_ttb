@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Auto TTB",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Run Jira test executions from a side panel: pass/fail test cases, collect screenshots, file defects, record and replay tests, export the Proof of Testing document.",
   "action": {
     "default_title": "Open Auto TTB"
@@ -20,7 +20,8 @@
     "unlimitedStorage",
     "activeTab",
     "scripting",
-    "declarativeNetRequestWithHostAccess"
+    "declarativeNetRequestWithHostAccess",
+    "debugger"
   ],
   "optional_host_permissions": [
     "<all_urls>"
@@ -32,8 +33,5 @@
       },
       "description": "Capture the visible tab into the open test case"
     }
-  },
-  "optional_permissions": [
-    "debugger"
-  ]
+  }
 }
