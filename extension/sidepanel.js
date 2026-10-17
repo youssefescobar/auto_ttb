@@ -536,11 +536,7 @@ function realInput(tabId) {
     },
     async type(text, typingMs) {
       for (const ch of text) {
-        if (ch === "\n") await this.key({ key: "Enter" });
-        else {
-          await send("Input.dispatchKeyEvent", { type: "keyDown", key: ch, text: ch, unmodifiedText: ch });
-          await send("Input.dispatchKeyEvent", { type: "keyUp", key: ch });
-        }
+        await this.key({ key: ch === "\n" ? "Enter" : ch });
         if (typingMs) await sleep(typingMs);
       }
     },

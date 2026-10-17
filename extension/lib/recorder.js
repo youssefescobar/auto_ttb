@@ -139,6 +139,12 @@ export async function playStep(step, opts) {
         el = root.querySelector(step.sel);
       } catch {}
       if (el && visible(el)) return el;
+      // Remote-control pages type through a hidden field, so keys may go to an invisible one
+      if (el && (step.type === "text" || step.type === "key")) return el;
+    }
+    if (step.type === "text" || step.type === "key") {
+      const a = document.activeElement;
+      if (a && a !== document.body) return a;
     }
     // Layout changed: look for the same kind of element with the same text
     if (step.text && step.type === "click") {
@@ -259,16 +265,48 @@ export function keysSeen() {
 
 // --- Real input through Chrome's debugger protocol -----------------------
 
-const KEY_CODES = { Enter: 13, Tab: 9, Escape: 27, Backspace: 8, Delete: 46, ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40, Home: 36, End: 35, PageUp: 33, PageDown: 34, " ": 32 };
+// Remote-control pages such as BrowserStack forward a key by its code and keyCode,
+// not its text, so every event carries the full physical key of a US keyboard.
+const NAMED = {
+  Enter: ["Enter", 13], Tab: ["Tab", 9], Escape: ["Escape", 27], Backspace: ["Backspace", 8], Delete: ["Delete", 46],
+  ArrowLeft: ["ArrowLeft", 37], ArrowUp: ["ArrowUp", 38], ArrowRight: ["ArrowRight", 39], ArrowDown: ["ArrowDown", 40],
+  Home: ["Home", 36], End: ["End", 35], PageUp: ["PageUp", 33], PageDown: ["PageDown", 34], " ": ["Space", 32],
+};
+const PUNCT = { "`": ["Backquote", 192, "~"], "-": ["Minus", 189, "_"], "=": ["Equal", 187, "+"], "[": ["BracketLeft", 219, "{"], "]": ["BracketRight", 221, "}"], "\\": ["Backslash", 220, "|"], ";": ["Semicolon", 186, ":"], "'": ["Quote", 222, '"'], ",": ["Comma", 188, "<"], ".": ["Period", 190, ">"], "/": ["Slash", 191, "?"] };
+const SHIFTED_DIGITS = ")!@#$%^&*(";
 
-// CDP Input.dispatchKeyEvent parameters (down, up) for a key step.
+// { code, keyCode, shift } of the key that types ch, or null for characters a US keyboard lacks.
+export function physicalKey(ch) {
+  if (NAMED[ch]) return { code: NAMED[ch][0], keyCode: NAMED[ch][1], shift: false };
+  if (/^[a-z]$/.test(ch)) return { code: `Key${ch.toUpperCase()}`, keyCode: ch.toUpperCase().charCodeAt(0), shift: false };
+  if (/^[A-Z]$/.test(ch)) return { code: `Key${ch}`, keyCode: ch.charCodeAt(0), shift: true };
+  if (/^[0-9]$/.test(ch)) return { code: `Digit${ch}`, keyCode: ch.charCodeAt(0), shift: false };
+  const d = SHIFTED_DIGITS.indexOf(ch);
+  if (d >= 0) return { code: `Digit${d}`, keyCode: 48 + d, shift: true };
+  for (const [base, [code, keyCode, shifted]] of Object.entries(PUNCT)) {
+    if (ch === base) return { code, keyCode, shift: false };
+    if (ch === shifted) return { code, keyCode, shift: true };
+  }
+  if (/^F\d+$/.test(ch)) return { code: ch, keyCode: 111 + Number(ch.slice(1)), shift: false };
+  return null;
+}
+
+const SHIFT = { key: "Shift", code: "ShiftLeft", windowsVirtualKeyCode: 16, nativeVirtualKeyCode: 16 };
+
+// CDP Input.dispatchKeyEvent parameters, in order, for one key step or one typed character.
+// step: { key, ctrl, shift, alt, meta } (a typed character is { key: ch }).
 export function keyEventParams(step) {
-  const modifiers = (step.alt ? 1 : 0) | (step.ctrl ? 2 : 0) | (step.meta ? 4 : 0) | (step.shift ? 8 : 0);
-  const single = step.key.length === 1;
-  const code = KEY_CODES[step.key] ?? (single ? step.key.toUpperCase().charCodeAt(0) : /^F(\d+)$/.test(step.key) ? 111 + Number(step.key.slice(1)) : 0);
-  const text = modifiers & 7 ? undefined : step.key === "Enter" ? "\r" : single ? step.key : undefined;
-  const down = { type: text ? "keyDown" : "rawKeyDown", key: step.key, windowsVirtualKeyCode: code, modifiers, ...(text ? { text, unmodifiedText: text } : {}) };
-  return [down, { type: "keyUp", key: step.key, windowsVirtualKeyCode: code, modifiers }];
+  const phys = physicalKey(step.key);
+  const shift = !!step.shift || !!phys?.shift;
+  const modifiers = (step.alt ? 1 : 0) | (step.ctrl ? 2 : 0) | (step.meta ? 4 : 0) | (shift ? 8 : 0);
+  const text = modifiers & 7 ? undefined : step.key === "Enter" ? "\r" : step.key.length === 1 ? step.key : undefined;
+  const ids = { key: step.key, code: phys?.code || "", windowsVirtualKeyCode: phys?.keyCode || 0, nativeVirtualKeyCode: phys?.keyCode || 0 };
+  const events = [];
+  if (shift) events.push({ type: "rawKeyDown", ...SHIFT, modifiers: 8 });
+  events.push({ type: text ? "keyDown" : "rawKeyDown", ...ids, modifiers, ...(text ? { text, unmodifiedText: text } : {}) });
+  events.push({ type: "keyUp", ...ids, modifiers });
+  if (shift) events.push({ type: "keyUp", ...SHIFT, modifiers: 0 });
+  return events;
 }
 
 // --- Helpers used by the side panel --------------------------------------

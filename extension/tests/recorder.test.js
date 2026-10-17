@@ -27,10 +27,20 @@ test("merges keys typed outside a field and names shortcuts", () => {
   assert.deepEqual(steps.map(describeStep), ['Type "ab1"', "Press Ctrl+a"]);
 });
 
-test("real key events", () => {
-  assert.deepEqual(keyEventParams({ key: "Enter" })[0], { type: "keyDown", key: "Enter", windowsVirtualKeyCode: 13, modifiers: 0, text: "\r", unmodifiedText: "\r" });
-  assert.deepEqual(keyEventParams({ key: "a", ctrl: true })[0], { type: "rawKeyDown", key: "a", windowsVirtualKeyCode: 65, modifiers: 2 });
+test("real key events carry the physical key", () => {
+  assert.deepEqual(keyEventParams({ key: "Enter" }), [
+    { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, modifiers: 0, text: "\r", unmodifiedText: "\r" },
+    { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, modifiers: 0 },
+  ]);
+  assert.deepEqual(keyEventParams({ key: "a", ctrl: true })[0], { type: "rawKeyDown", key: "a", code: "KeyA", windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65, modifiers: 2 });
+  const upper = keyEventParams({ key: "Q" });
+  assert.deepEqual(upper.map((e) => [e.type, e.key, e.code]), [["rawKeyDown", "Shift", "ShiftLeft"], ["keyDown", "Q", "KeyQ"], ["keyUp", "Q", "KeyQ"], ["keyUp", "Shift", "ShiftLeft"]]);
+  assert.equal(upper[1].modifiers, 8);
+  assert.deepEqual(keyEventParams({ key: "@" })[1].code, "Digit2");
+  assert.deepEqual(keyEventParams({ key: "_" })[1].code, "Minus");
+  assert.equal(keyEventParams({ key: " " })[0].code, "Space");
   assert.equal(keyEventParams({ key: "ArrowDown" })[0].windowsVirtualKeyCode, 40);
+  assert.equal(keyEventParams({ key: "ب" })[0].text, "ب"); // no US key: text only
 });
 
 test("masks typed passwords", () => {
