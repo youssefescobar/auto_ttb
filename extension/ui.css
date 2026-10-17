@@ -138,3 +138,16 @@ form details > summary { cursor: pointer; font-weight: 600; margin: 10px 0; }
 label > small { display: block; font-weight: 400; margin-top: 2px; }
 label > select { display: block; width: 100%; }
 .checks + small { display: none; }
+
+/* Recorder */
+.recorder { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; margin: 10px 0; background: var(--card); }
+.recorder.recording { border-color: var(--fail); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fail) 15%, transparent); }
+.rec-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--fail); animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: .2; } }
+.steps-box > summary { cursor: pointer; margin-top: 4px; font-size: 12px; }
+.steps { margin: 6px 0 0; padding-left: 22px; font-size: 12px; max-height: 220px; overflow: auto; }
+.steps li { padding: 1px 0; }
+.steps li > span { display: inline-block; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+.steps li .icon { font-size: 13px; padding: 0 4px; vertical-align: middle; }
+.steps li.now { font-weight: 600; color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }

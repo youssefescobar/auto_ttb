@@ -24,7 +24,13 @@ A Chrome/Edge side panel (it replaced the old local Python server). It runs insi
 - **Check duplicates** lists open defects in the project with similar words; **Use this** links an existing one instead of filing a new one.
 - Settings → Defects shows dropdowns filled from your project's Defect create screen. The extension finds Jira's custom fields by name, so there are no field IDs to set.
 
-Still to come: the click recorder (step 3).
+### Record and replay (step 3)
+
+- In an open test case, click **● Record**, then click and type through the test in the current tab. Click **📷 Checkpoint** wherever you want a screenshot, then **Stop**.
+- **▶ Replay** opens the start page in the current tab, repeats your clicks and typing, and takes the checkpoint screenshots into Actual. If an element can't be found, replay stops and tells you at which step.
+- The first Record or Replay asks Chrome for access to the sites you test. That access also lets **Capture tab** work without clicking the toolbar icon first.
+- Steps are stored with the test case; open **Steps** to remove one. Passwords are stored but shown as dots.
+- Works best on normal web pages. On BrowserStack Live the device is a video stream, so replay can only click at recorded positions, which breaks if the layout shifts.
 
 ## Install (developer mode)
 

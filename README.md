@@ -5,6 +5,7 @@ A Chrome/Edge side panel for QA on Jira Data Center with Xray. It uses the Jira 
 - Load a Test Execution and its test cases, and set each Xray run to Pass, Fail, Blocked or Executing.
 - Collect Expected/Actual screenshots and download the Proof of Testing Word document.
 - Draft defects with Gemini, check for duplicates, and create them in Jira with the screenshots attached and the defect linked to the test case and run.
+- Record a test's clicks and typing once, then replay it with the screenshots taken automatically.
 
 Install and usage: [`extension/README.md`](extension/README.md).
 

@@ -4,6 +4,7 @@ import * as store from "./lib/store.js";
 import { buildPotBlob } from "./lib/pot.js";
 import { draftDefect } from "./lib/ai.js";
 import { applyTitlePattern, buildDefectFields, metaFieldFor, optionsFor } from "./lib/defect.js";
+import { addStep, describeStep, playStep, recorderMain, recorderStop } from "./lib/recorder.js";
 
 const $ = (id) => document.getElementById(id);
 const STATUSES = { pending: "Pending", executing: "Executing", pass: "Passed", fail: "Failed", blocked: "Blocked" };
@@ -24,6 +25,8 @@ const state = {
   meta: null, // Defect create screen from Jira, loaded on first use
   duplicates: {}, // tc key -> [{ key, summary, status }]
   filter: "", // status the test case list is narrowed to ("" = all)
+  rec: null, // { tabId, tcKey } while recording
+  playing: null, // { tcKey, step } while replaying
 };
 
 // --- Small DOM helper ------------------------------------------------------
@@ -173,7 +176,7 @@ async function captureTab(tcKey, category) {
   try {
     dataUrl = await chrome.tabs.captureVisibleTab(tab?.windowId, { format: "png" });
   } catch {
-    throw new Error("Chrome needs one click on the Auto TTB toolbar icon while that tab is showing, then Capture works there. Alt+Shift+S also captures, and pasting a Snipping Tool shot always works.");
+    throw new Error("Chrome needs one click on the Auto TTB toolbar icon while that tab is showing (or allow site access once via Record), then Capture works there. Alt+Shift+S also captures, and pasting a Snipping Tool shot always works.");
   }
   await addShots(tcKey, category, [await (await fetch(dataUrl)).blob()]);
   toast(`Captured into ${CATEGORIES[category]}.`);
@@ -422,6 +425,151 @@ function defectEditor(tc) {
   );
 }
 
+// --- Recorder --------------------------------------------------------------
+
+const ALL_SITES = { origins: ["<all_urls>"] }; // screenshots without a toolbar click need <all_urls>
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Recording and replaying need access to the site under test. Must be called
+// first thing in a click handler: Chrome only shows the prompt for a user gesture.
+function askForSites() {
+  return chrome.permissions.request(ALL_SITES).then((ok) => {
+    if (!ok) throw new Error("Recording needs Chrome's permission to read and change the pages you test.");
+  });
+}
+
+async function activeTab(needPage = true) {
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (!tab) throw new Error("No browser tab to use.");
+  if (needPage && !/^https?:/.test(tab.url || "")) throw new Error("Open the page you want to test in the current tab first (an http or https page).");
+  return tab;
+}
+
+// Screenshot of a given tab: brings it to the front first, since Chrome captures what's visible.
+async function shootTab(tab) {
+  await chrome.tabs.update(tab.id, { active: true });
+  await sleep(150);
+  const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+  return (await fetch(dataUrl)).blob();
+}
+
+async function inject(tabId, func, args = []) {
+  const [res] = await chrome.scripting.executeScript({ target: { tabId }, func, args });
+  return res?.result;
+}
+
+async function startRecording(tc, granted) {
+  await granted;
+  const tab = await activeTab();
+  await inject(tab.id, recorderMain);
+  tc.recording = { steps: [{ type: "open", url: tab.url }], recorded_at: new Date().toISOString() };
+  state.rec = { tabId: tab.id, tcKey: tc.key };
+  await saveTe();
+  render();
+  toast("Recording. Click through the test in the page, add a checkpoint wherever you want a screenshot, then Stop.");
+}
+
+async function stopRecording() {
+  const { tabId } = state.rec;
+  state.rec = null;
+  await inject(tabId, recorderStop).catch(() => {}); // the tab may be gone
+  await saveTe();
+  render();
+}
+
+async function recordStep(step) {
+  const tc = tcByKey(state.rec.tcKey);
+  if (!tc?.recording) return;
+  addStep(tc.recording.steps, step);
+  await saveTe();
+  render();
+}
+
+async function checkpoint() {
+  const { tcKey, tabId } = state.rec;
+  await recordStep({ type: "shot", category: "actual" });
+  await addShots(tcKey, "actual", [await shootTab(await chrome.tabs.get(tabId))]);
+  toast("Checkpoint added; screenshot taken into Actual.");
+}
+
+async function waitForLoad(tabId, timeoutMs = 20000) {
+  await sleep(300); // let a navigation start
+  for (const end = Date.now() + timeoutMs; Date.now() < end; await sleep(200)) {
+    if ((await chrome.tabs.get(tabId)).status === "complete") return;
+  }
+}
+
+async function replay(tc, granted) {
+  await granted;
+  const steps = tc.recording?.steps || [];
+  const tab = await activeTab(false); // replay opens the start page itself
+  let shots = 0;
+  try {
+    for (const [i, step] of steps.entries()) {
+      state.playing = { tcKey: tc.key, step: i };
+      render();
+      if (step.type === "open") {
+        await chrome.tabs.update(tab.id, { url: step.url, active: true });
+        await waitForLoad(tab.id);
+      } else if (step.type === "page") {
+        await waitForLoad(tab.id);
+      } else if (step.type === "shot") {
+        await waitForLoad(tab.id);
+        await sleep(600); // let animations settle
+        await addShots(tc.key, step.category || "actual", [await shootTab(tab)]);
+        shots++;
+      } else {
+        await waitForLoad(tab.id);
+        const res = await inject(tab.id, playStep, [step, 8000]);
+        if (!res?.ok) throw new Error(`Replay stopped at step ${i + 1} (${describeStep(step)}): ${res?.why || "the page didn't respond"}.`);
+        await sleep(400);
+      }
+    }
+  } finally {
+    state.playing = null;
+    render();
+  }
+  toast(`Replayed ${steps.length} steps${shots ? ` and took ${shots} screenshot${shots > 1 ? "s" : ""} into Actual` : ""}.`);
+}
+
+function recorderSection(tc) {
+  const steps = tc.recording?.steps || [];
+  const recording = state.rec?.tcKey === tc.key;
+  const playing = state.playing?.tcKey === tc.key;
+  const otherBusy = (state.rec && !recording) || (state.playing && !playing);
+  const list = steps.length ? h("ol", { class: "steps" }, steps.map((step, i) => h("li", { class: playing && state.playing.step === i ? "now" : null },
+    h("span", { class: "grow" }, describeStep(step)),
+    recording || playing || i === 0 ? null : h("button", {
+      class: "icon", title: "Remove step", onclick: async () => { steps.splice(i, 1); await saveTe(); render(); },
+    }, "×")))) : null;
+
+  if (recording) {
+    return h("section", { class: "recorder recording" },
+      h("div", { class: "row" },
+        h("strong", { class: "grow" }, h("span", { class: "rec-dot" }), ` Recording · ${steps.length} steps`),
+        h("button", { class: "small", onclick: () => busy("checkpoint", checkpoint) }, "📷 Checkpoint"),
+        h("button", { class: "small primary", onclick: () => busy("stop", stopRecording) }, "Stop")),
+      list);
+  }
+  return h("section", { class: "recorder" },
+    h("div", { class: "row" },
+      h("strong", { class: "grow" }, "Recording", steps.length ? h("span", { class: "muted" }, ` ${steps.length} steps`) : null),
+      steps.length > 1 ? h("button", {
+        class: "small primary", disabled: otherBusy || playing,
+        onclick: () => { const granted = askForSites(); busy("replay", () => replay(tc, granted)); },
+      }, playing ? "Replaying…" : "▶ Replay") : null,
+      h("button", {
+        class: "small", disabled: otherBusy || playing,
+        onclick: () => {
+          if (steps.length > 1 && !confirm("Record again? This replaces the current steps.")) return;
+          const granted = askForSites();
+          busy("record", () => startRecording(tc, granted));
+        },
+      }, steps.length ? "Record again" : "● Record")),
+    steps.length ? h("details", { class: "steps-box", open: playing }, h("summary", { class: "muted" }, "Steps"), list)
+      : h("small", { class: "muted" }, "Records your clicks and typing in the current tab. Replay repeats them and takes the screenshots for you."));
+}
+
 // --- PoT export ------------------------------------------------------------
 
 const DOCX_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/bmp": "bmp" };
@@ -506,6 +654,7 @@ function tcItem(tc) {
       statusButton("pass", "Pass"), statusButton("fail", "Fail"), statusButton("blocked", "Blocked"), statusButton("executing", "Executing")),
     shotSection(tc, "expected"),
     shotSection(tc, "actual"),
+    recorderSection(tc),
     h("label", {}, "Note",
       h("textarea", { rows: 2, value: tc.note || "", onchange: async (e) => { tc.note = e.target.value.trim(); await saveTe(); } })),
     h("label", {}, "Linked defect",
@@ -639,7 +788,11 @@ document.addEventListener("paste", (e) => {
 });
 
 // Alt+Shift+S (see manifest "commands") captures the visible tab in the background.
-chrome.runtime.onMessage.addListener((msg) => {
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  if (msg?.type === "rec-step") {
+    if (state.rec && sender.tab?.id === state.rec.tabId && !sender.frameId) recordStep(msg.step);
+    return;
+  }
   if (msg?.type !== "captured") return;
   if (!state.te || !state.openTc) return toast("Open a test case first, then capture.", "error");
   if (msg.error) return toast(`Capture failed: ${msg.error}`, "error");
@@ -647,6 +800,25 @@ chrome.runtime.onMessage.addListener((msg) => {
     await addShots(state.openTc, state.pasteTarget, [await (await fetch(msg.dataUrl)).blob()]);
     toast(`Captured into ${CATEGORIES[state.pasteTarget]}.`);
   });
+});
+
+// A page load ends the injected recorder; note the load and start it again.
+chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
+  if (!state.rec || tabId !== state.rec.tabId || info.status !== "complete") return;
+  await recordStep({ type: "page", url: tab.url });
+  try {
+    await inject(tabId, recorderMain);
+  } catch (e) {
+    toast(`Recording paused on this page: ${e.message}`, "error");
+  }
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (state.rec?.tabId === tabId) {
+    state.rec = null;
+    saveTe().then(render);
+    toast("The recorded tab was closed, so recording stopped.");
+  }
 });
 
 chrome.storage.onChanged.addListener(async (changes, area) => {
